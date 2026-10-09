@@ -47,6 +47,46 @@ GitHub ProjectsのPhaseは関連するIssueを開発段階ごとにまとめ、I
 `develop`を開発統合用ブランチ、`main`を各Phaseの完了時点における安定版として扱う。
 Gitタグは使用せず、Pull Requestとコミット履歴で変更内容を追跡する。
 
+### 1.3 モノレポ構成
+
+バックエンド、将来追加するフロントエンド、IaCを同一リポジトリで管理するモノレポ構成を採用する。
+
+```text
+kyoya67-todo-api/
+├── backend/
+│   ├── cmd/
+│   │   └── api/
+│   │       └── main.go
+│   ├── internal/
+│   │   ├── config/
+│   │   ├── database/
+│   │   ├── domain/
+│   │   ├── handler/
+│   │   ├── service/
+│   │   └── repository/
+│   ├── go.mod
+│   ├── go.sum
+│   └── Dockerfile
+├── frontend/
+├── api/
+│   └── openapi/
+│       └── openapi.yaml
+├── infra/
+│   └── terraform/
+├── compose.yaml
+├── AGENTS.md
+├── DESIGN.md
+└── README.md
+```
+
+`backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`は後から追加するWebアプリケーションを管理し、バックエンドとは独立したアプリケーションとして扱う。`infra/terraform/`ではAWS ECS Fargate、ECR、RDS、IAMなどのインフラ構成を管理する。
+
+`api/openapi/`では、バックエンドとフロントエンドが共有するREST APIの仕様をOpenAPIで管理する。APIのパス、リクエスト、レスポンス、ステータスコード、入力検証、エラー形式はOpenAPI定義を基準とする。
+
+Goの依存関係は`backend/go.mod`と`backend/go.sum`で管理し、フロントエンドの依存関係とは分離する。`compose.yaml`は、ローカル環境でバックエンド、フロントエンド、PostgreSQLなどのサービスをまとめて起動するためにリポジトリのルートへ配置する。
+
+現時点ではバックエンドを優先して実装し、フロントエンドは必須REST APIとOpenAPI仕様が整った後に追加する。フロントエンドの追加によってバックエンドの必須要件や選考課題の実装を遅らせない。
+
 ---
 
 ## 2. AIの活用方針
