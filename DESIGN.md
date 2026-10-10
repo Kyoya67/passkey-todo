@@ -6,6 +6,8 @@
 まず必須要件の実装とローカル環境でのテストを完了させ、次にTerraformを利用してAWS環境へデプロイする。その後、認証・認可、gRPC、パフォーマンス改善などの追加機能を実装する。
 開発工程はGitHub ProjectsのPhaseで管理し、個別の作業はGitHub Issuesで管理する。
 
+選考課題の原文と提出条件はプロジェクト直下の`ASSIGNMENT.md`に記録する。`ASSIGNMENT.md`は外部から与えられた要件の記録、`DESIGN.md`はその要件に対する本プロジェクトの設計判断・開発方針・進捗の記録として扱う。課題文の必須要件と任意の追加要件を混同しない。
+
 ### 1.1 PhaseとIssueの構成
 
 #### Phase 1：Local Development
@@ -52,7 +54,7 @@ Gitタグは使用せず、Pull Requestとコミット履歴で変更内容を�
 バックエンド、将来追加するフロントエンド、IaCを同一リポジトリで管理するモノレポ構成を採用する。
 
 ```text
-kyoya67-todo-api/
+kyoya67-todo/
 ├── backend/
 │   ├── cmd/
 │   │   └── api/
@@ -73,6 +75,7 @@ kyoya67-todo-api/
 │       └── openapi.yaml
 ├── infra/
 │   └── terraform/
+├── ASSIGNMENT.md
 ├── compose.yaml
 ├── AGENTS.md
 ├── DESIGN.md
