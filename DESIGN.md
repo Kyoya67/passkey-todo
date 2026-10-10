@@ -91,7 +91,7 @@ kyoya67-todo/
 └── README.md
 ```
 
-`backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`はWebアプリケーションを管理し、バックエンドとは独立したアプリケーションとして扱う。ローカルレビュー時の環境依存を減らすため、フロントエンドもコンテナ化し、バックエンド、PostgreSQLとともにComposeから起動できる構成とする。`infra/terraform/`ではAWS ECS Fargate、ECR、RDS、IAMなどのインフラ構成を管理する。
+`backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`はフロントエンドを管理し、バックエンドとは独立したアプリケーションとして扱う。ローカルレビュー時の環境依存を減らすため、フロントエンドもコンテナ化し、バックエンド、PostgreSQLとともにComposeから起動できる構成とする。`infra/terraform/`ではAWS ECS Fargate、ECR、RDS、IAMなどのインフラ構成を管理する。
 
 `api/openapi/`では、バックエンドとフロントエンドが共有するREST APIの仕様をOpenAPIで管理する。APIのパス、リクエスト、レスポンス、ステータスコード、入力検証、エラー形式はOpenAPI定義を基準とする。
 
@@ -336,6 +336,14 @@ ECS Serviceは必要時のみタスク数を1に増やし、利用しない場�
 
 GitHub ActionsからAWSへアクセスする際はOIDCを利用する。
 長期アクセスキーをGitHub Secretsに保存せず、一時的な認証情報を利用してECR・ECSへのデプロイを行う。
+
+### 4.9 Go外部パッケージ
+
+| **分類** | **importするパッケージ** | **用途** |
+|---|---|---|
+| Webフレームワーク | Echo (`github.com/labstack/echo/v4`) | HTTPサーバー、ルーティング、JSONレスポンス、ミドルウェアを提供する |
+| PostgreSQLドライバ・接続プール | pgx/v5 (`github.com/jackc/pgx/v5`) | PostgreSQLとの通信、`pgxpool`による接続プール、PostgreSQL固有型を扱う |
+| 環境変数ファイル読み込み | godotenv (`github.com/joho/godotenv`) | ローカル開発時にプロジェクトルートの`.env`を読み込む |
 
 ---
 
