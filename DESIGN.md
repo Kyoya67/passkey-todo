@@ -8,7 +8,16 @@
 
 選考課題の原文と提出条件はプロジェクト直下の`ASSIGNMENT.md`に記録する。`ASSIGNMENT.md`は外部から与えられた要件の記録、`DESIGN.md`はその要件に対する本プロジェクトの設計判断・開発方針・進捗の記録として扱う。課題文の必須要件と任意の追加要件を混同しない。
 
-### 1.1 PhaseとIssueの構成
+### 1.1 用語の定義
+
+- バックエンド：GoとEchoで構成するサーバーアプリケーション全体
+- API：バックエンドが提供するHTTPインターフェース
+- APIコンテナ：バックエンドを実行するコンテナ
+- PostgreSQL：バックエンドから接続するデータベースサービス
+
+以降、アプリケーション全体を指す場合は「バックエンド」、HTTPインターフェースを指す場合は「API」と表記する。課題文の引用・要約では、原文に合わせて「API」と表記する。
+
+### 1.2 PhaseとIssueの構成
 
 #### Phase 1：Local Development
 
@@ -35,7 +44,7 @@
 - Issue #15：追加機能に伴うOpenAPIとテストの更新
 - Issue #16：gRPCエンドポイントの追加
 
-### 1.2 ブランチ運用
+### 1.3 ブランチ運用
 
 GitHub ProjectsのPhaseは関連するIssueを開発段階ごとにまとめ、Issueは個別の作業単位として管理する。
 開発には`main`、`develop`、Issueごとの作業ブランチを使用する。
@@ -49,7 +58,7 @@ GitHub ProjectsのPhaseは関連するIssueを開発段階ごとにまとめ、I
 `develop`を開発統合用ブランチ、`main`を各Phaseの完了時点における安定版として扱う。
 Gitタグは使用せず、Pull Requestとコミット履歴で変更内容を追跡する。
 
-### 1.3 モノレポ構成
+### 1.4 モノレポ構成
 
 バックエンド、将来追加するフロントエンド、IaCを同一リポジトリで管理するモノレポ構成を採用する。
 
@@ -82,13 +91,13 @@ kyoya67-todo/
 └── README.md
 ```
 
-`backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`は後から追加するWebアプリケーションを管理し、バックエンドとは独立したアプリケーションとして扱う。`infra/terraform/`ではAWS ECS Fargate、ECR、RDS、IAMなどのインフラ構成を管理する。
+`backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`はWebアプリケーションを管理し、バックエンドとは独立したアプリケーションとして扱う。ローカルレビュー時の環境依存を減らすため、フロントエンドもコンテナ化し、バックエンド、PostgreSQLとともにComposeから起動できる構成とする。`infra/terraform/`ではAWS ECS Fargate、ECR、RDS、IAMなどのインフラ構成を管理する。
 
 `api/openapi/`では、バックエンドとフロントエンドが共有するREST APIの仕様をOpenAPIで管理する。APIのパス、リクエスト、レスポンス、ステータスコード、入力検証、エラー形式はOpenAPI定義を基準とする。
 
-Goの依存関係は`backend/go.mod`と`backend/go.sum`で管理し、フロントエンドの依存関係とは分離する。`compose.yaml`は、ローカル環境でバックエンド、フロントエンド、PostgreSQLなどのサービスをまとめて起動するためにリポジトリのルートへ配置する。
+Goの依存関係は`backend/go.mod`と`backend/go.sum`で管理し、フロントエンドの依存関係とは分離する。`backend/Dockerfile`はバックエンド用コンテナイメージ、`frontend/Dockerfile`はフロントエンド用コンテナイメージの作成方法を定義する。`compose.yaml`はリポジトリのルートへ配置し、ローカル環境でフロントエンド、バックエンド、PostgreSQLをまとめて起動する。
 
-現時点ではバックエンドを優先して実装し、フロントエンドは必須REST APIとOpenAPI仕様が整った後に追加する。フロントエンドの追加によってバックエンドの必須要件や選考課題の実装を遅らせない。
+ローカル環境では、原則として`docker compose up --build`でAPI、PostgreSQL、フロントエンドを起動し、レビュー担当者が個別のランタイムや依存パッケージを準備しなくても動作確認できる状態を目指す。クラウド環境では、フロントエンド、API、データベースをそれぞれ適切なサービスへ配置するが、ローカルComposeで利用するコンテナ化の方針と矛盾しない構成にする。
 
 ---
 
