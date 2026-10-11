@@ -1,0 +1,215 @@
+openapi: 3.0.3
+info:
+  title: Kyoya67 TODO API
+  version: 1.0.0
+  description: TODOリストを管理するREST API
+
+servers:
+  - url: http://localhost:8080
+
+tags:
+  - name: todos
+    description: TODO管理
+  - name: health
+    description: ヘルスチェック
+
+paths:
+  /health:
+    get:
+      tags:
+        - health
+      summary: ヘルスチェック
+      operationId: getHealth
+      responses:
+        '200':
+          description: バックエンドが起動している
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /todos:
+    post:
+      tags:
+        - todos
+      summary: TODOを作成
+      operationId: createTodo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TodoRequest'
+      responses:
+        '204':
+          description: TODOを作成した
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+    get:
+      tags:
+        - todos
+      summary: TODO一覧を取得
+      operationId: listTodos
+      parameters:
+        - $ref: '#/components/parameters/TitleQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+        - $ref: '#/components/parameters/OffsetQuery'
+      responses:
+        '200':
+          description: TODO一覧を取得した
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /todos/{id}:
+    put:
+      tags:
+        - todos
+      summary: TODOのタイトルを更新
+      operationId: updateTodo
+      parameters:
+        - $ref: '#/components/parameters/TodoID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TodoRequest'
+      responses:
+        '204':
+          description: TODOを更新した
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+    delete:
+      tags:
+        - todos
+      summary: TODOを削除
+      operationId: deleteTodo
+      parameters:
+        - $ref: '#/components/parameters/TodoID'
+      responses:
+        '204':
+          description: TODOを削除した
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+components:
+  parameters:
+    TodoID:
+      name: id
+      in: path
+      required: true
+      description: TODOのID
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+
+    TitleQuery:
+      name: title
+      in: query
+      required: false
+      description: タイトルの部分一致検索文字列
+      schema:
+        type: string
+
+    LimitQuery:
+      name: limit
+      in: query
+      required: false
+      description: 取得件数。未指定時は100件、最大1000件
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 1000
+        default: 100
+
+    OffsetQuery:
+      name: offset
+      in: query
+      required: false
+      description: 先頭からスキップする件数
+      schema:
+        type: integer
+        format: int32
+        minimum: 0
+        default: 0
+
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          example: ok
+
+    TodoRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+          description: TODOのタイトル
+          example: 買い物をする
+
+    Todo:
+      type: object
+      required:
+        - id
+        - title
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        title:
+          type: string
+          example: 買い物をする
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TodoListResponse:
+      type: object
+      required:
+        - todos
+      properties:
+        todos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Todo'
+
+  responses:
+    BadRequest:
+      description: リクエストが不正
+    NotFound:
+      description: 指定されたTODOが存在しない
+    ServiceUnavailable:
+      description: サーバーまたはデータベースでエラーが発生した
