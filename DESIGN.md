@@ -71,6 +71,7 @@ kyoya67-todo/
 │   ├── internal/
 │   │   ├── config/
 │   │   ├── database/
+│   │   ├── openapi/
 │   │   ├── domain/
 │   │   ├── handler/
 │   │   ├── service/
@@ -231,7 +232,9 @@ AIの具体的な利用履歴、代表的なプロンプト、採用・修正・
 - 正常時：204
 - 指定したTODOが存在しない場合：404
 
-APIの具体的なURL、リクエスト・レスポンス形式、入力検証、エラー仕様はOpenAPIで定義する。
+APIの具体的なURL、リクエスト・レスポンス形式、入力検証、エラー仕様はOpenAPIで定義する。OpenAPI定義をAPI仕様の正とするSpec-first方針を採用し、実装と仕様のずれを減らす。
+
+`oapi-codegen`を利用して、`api/openapi/openapi.yaml`からGoのリクエスト・レスポンスモデル、Echo用のServer Interface、ルーティング登録コード、埋め込み仕様を生成する。生成コードは`backend/internal/openapi/`で管理し、直接編集せず、OpenAPI定義を修正して再生成する。Handlerは生成されたServer Interfaceを実装し、ServiceとRepositoryの業務処理・DBアクセスは手動で実装する。
 
 ### 3.2 追加機能要件
 
@@ -313,6 +316,7 @@ SQLまたはデータベーススキーマを変更した場合は、開発時�
 | **採用** | **技術** | **判断理由** |
 |---|---|---|
 | ○ | OpenAPI | 必須要件であるREST APIのエンドポイント、パラメータ、リクエスト・レスポンス、HTTPステータスを管理する。課題文で明示された必須要件ではないが、仕様と実装の対応を確認しやすくするため採用する |
+| ○ | oapi-codegen（Echo server） | OpenAPIを正としてGoの型、Echo用Server Interface、ルーティング登録コードを生成し、仕様と実装の不整合をコンパイル時に検出しやすくする |
 | △ | Protocol Buffers（`.proto`） | 課題文の追加要件であるgRPCを実装する場合に、サービス、RPCメソッド、メッセージ型を定義する。gRPCを実装する余裕がある場合に採用する |
 | △ | GraphQL Schema | 課題文の追加要件であるGraphQLを実装する場合に、Query、Mutation、型、入力値を定義する。GraphQLを実装する余裕がある場合に採用する |
 | △ | Protocol Buffers（`.proto`） + Connect | Connectを追加で採用する場合に、RPCメソッドとメッセージ型を定義する。課題文にConnectの指定はないため、gRPCやGraphQLより優先しない |
