@@ -13,19 +13,10 @@ SELECT
     created_at,
     updated_at
 FROM todos
-WHERE title ILIKE '%' || $1 || '%'
+WHERE title ILIKE '%' || sqlc.arg(title)::text || '%'
 ORDER BY updated_at DESC, id DESC
-LIMIT $2
-OFFSET $3;
-
--- name: GetTodo :one
-SELECT
-    id,
-    title,
-    created_at,
-    updated_at
-FROM todos
-WHERE id = $1;
+LIMIT sqlc.arg(page_limit)::int
+OFFSET sqlc.arg(page_offset)::int;
 
 -- name: UpdateTodo :one
 UPDATE todos
@@ -35,6 +26,7 @@ SET
 WHERE id = $1
 RETURNING id, title, created_at, updated_at;
 
--- name: DeleteTodo :exec
+-- name: DeleteTodo :one
 DELETE FROM todos
-WHERE id = $1;
+WHERE id = $1
+RETURNING id;
