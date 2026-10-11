@@ -71,6 +71,7 @@ kyoya67-todo/
 │   ├── internal/
 │   │   ├── config/
 │   │   ├── database/
+│   │   ├── openapi/
 │   │   ├── domain/
 │   │   ├── handler/
 │   │   ├── service/
@@ -95,19 +96,17 @@ kyoya67-todo/
 
 `backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`はフロントエンドを管理し、バックエンドとは独立したアプリケーションとして扱う。ローカルレビュー時の環境依存を減らすため、フロントエンドもコンテナ化し、バックエンド、PostgreSQLとともにComposeから起動できる構成とする。`infra/terraform/`ではAWS ECS Fargate、ECR、RDS、IAMなどのインフラ構成を管理する。
 
-`api/openapi/`では、バックエンドとフロントエンドが共有するREST APIの仕様をOpenAPIで管理する。APIのパス、リクエスト、レスポンス、ステータスコード、入力検証、エラー形式はOpenAPI定義を基準とする。
-
-Goの依存関係は`backend/go.mod`と`backend/go.sum`で管理し、フロントエンドの依存関係とは分離する。`backend/Dockerfile`はバックエンド用コンテナイメージ、`frontend/Dockerfile`はフロントエンド用コンテナイメージの作成方法を定義する。`compose.yaml`はリポジトリのルートへ配置し、ローカル環境でフロントエンド、バックエンド、PostgreSQLをまとめて起動する。
-
-ローカル環境では、原則として`docker compose up --build`でバックエンド、PostgreSQL、フロントエンドを起動し、レビュー担当者が個別のランタイムや依存パッケージを準備しなくても動作確認できる状態を目指す。クラウド環境では、フロントエンド、バックエンド、データベースをそれぞれ適切なサービスへ配置するが、ローカルComposeで利用するコンテナ化の方針と矛盾しない構成にする。
-
 #### ローカル環境の環境変数
 
 ローカルの共有設定はプロジェクト直下の`.env`で管理する。Composeは`compose.yaml`と同じディレクトリにある`.env`を、`${VARIABLE}`形式の値を置換するために自動で読み込む。
 
-`.env`の値をすべてのサービスへ自動的に渡すのではなく、`compose.yaml`の`environment`でサービスごとに必要な環境変数だけを明示する。バックエンドには`DB_HOST`、`DB_PORT`、`DB_USER`、`DB_PASSWORD`、`DB_NAME`を渡し、PostgreSQLには`POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB`として渡す。これにより、設定値は共通化しつつ、各コンテナが受け取る環境変数を制限する。
+`.env`の値をすべてのサービスへ自動的に渡すのではなく、コンテナごとに必要な環境変数だけを明示する。バックエンドには`DB_HOST`、`DB_PORT`、`DB_USER`、`DB_PASSWORD`、`DB_NAME`を渡し、PostgreSQLには`POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB`として渡す。これにより、設定値は共通化しつつ、各コンテナが受け取る環境変数を制限する。
 
 実際の`.env`はコミットせず、`.env.example`だけをリポジトリで管理する。クラウド環境の秘密情報は、Composeの`.env`ではなくSecrets ManagerやParameter Storeなどのサービスで管理する。
+
+#### CORS
+
+バックエンドにはCORSミドルウェアを設定する。許可するOriginは`CORS_ALLOWED_ORIGINS`環境変数でカンマ区切りに指定し、ローカル開発ではSwagger UIと将来のフロントエンド開発サーバーのOriginを許可する。すべてのOriginを無条件に許可せず、クラウド環境では環境ごとのOriginを明示する。
 
 ---
 
@@ -227,8 +226,6 @@ AIの具体的な利用履歴、代表的なプロンプト、採用・修正・
 - 正常時：204
 - 指定したTODOが存在しない場合：404
 
-APIの具体的なURL、リクエスト・レスポンス形式、入力検証、エラー仕様はOpenAPIで定義する。
-
 ### 3.2 追加機能要件
 
 - パスキー認証によるログイン
@@ -309,10 +306,19 @@ SQLまたはデータベーススキーマを変更した場合は、開発時�
 | **採用** | **技術** | **判断理由** |
 |---|---|---|
 | ○ | OpenAPI | 必須要件であるREST APIのエンドポイント、パラメータ、リクエスト・レスポンス、HTTPステータスを管理する。課題文で明示された必須要件ではないが、仕様と実装の対応を確認しやすくするため採用する |
+| ○ | oapi-codegen（Echo server） | OpenAPIを正としてGoの型、Echo用Server Interface、ルーティング登録コードを生成し、仕様と実装の不整合をコンパイル時に検出しやすくする |
 | △ | Protocol Buffers（`.proto`） | 課題文の追加要件であるgRPCを実装する場合に、サービス、RPCメソッド、メッセージ型を定義する。gRPCを実装する余裕がある場合に採用する |
 | △ | GraphQL Schema | 課題文の追加要件であるGraphQLを実装する場合に、Query、Mutation、型、入力値を定義する。GraphQLを実装する余裕がある場合に採用する |
 | △ | Protocol Buffers（`.proto`） + Connect | Connectを追加で採用する場合に、RPCメソッドとメッセージ型を定義する。課題文にConnectの指定はないため、gRPCやGraphQLより優先しない |
 | — | AsyncAPI | 現時点ではイベント駆動のメッセージングを実装しないため採用しない |
+
+#### OpenAPI・oapi-codegenの採用経緯
+
+APIの具体的なURL、リクエスト・レスポンス形式、入力検証、エラー仕様を仕様書として共有するため、OpenAPIを採用する。OpenAPI定義をAPI仕様の正とするSpec-first方針により、フロントエンド、Swagger UI、バックエンド実装の認識を揃え、実装と仕様のずれを減らす。
+
+さらに、OpenAPIの定義とGo/Echoの実装を手動で別々に管理すると、パス、パラメータ、リクエスト・レスポンス型の不整合が発生しやすい。そのため、`oapi-codegen`を利用して、`api/openapi/openapi.yaml`からGoのリクエスト・レスポンスモデル、Echo用のServer Interface、ルーティング登録コード、埋め込み仕様を生成する。
+
+生成コードは`backend/internal/openapi/`で管理し、直接編集せず、OpenAPI定義を修正して再生成する。Handlerは生成されたServer Interfaceを実装し、ServiceとRepositoryの業務処理・DBアクセスは手動で実装する。これにより、API契約とHandlerの不整合をコンパイル時に検出しやすくする。
 
 ### 4.6 コンテナ実行環境
 
