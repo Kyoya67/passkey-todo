@@ -7,8 +7,6 @@ package sqlc
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createTodo = `-- name: CreateTodo :one
@@ -32,36 +30,17 @@ func (q *Queries) CreateTodo(ctx context.Context, title string) (Todo, error) {
 	return i, err
 }
 
-const deleteTodo = `-- name: DeleteTodo :exec
+const deleteTodo = `-- name: DeleteTodo :one
 DELETE FROM todos
 WHERE id = $1
+RETURNING id
 `
 
-func (q *Queries) DeleteTodo(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteTodo, id)
-	return err
-}
-
-const getTodo = `-- name: GetTodo :one
-SELECT
-    id,
-    title,
-    created_at,
-    updated_at
-FROM todos
-WHERE id = $1
-`
-
-func (q *Queries) GetTodo(ctx context.Context, id int64) (Todo, error) {
-	row := q.db.QueryRow(ctx, getTodo, id)
-	var i Todo
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+func (q *Queries) DeleteTodo(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRow(ctx, deleteTodo, id)
+	var id_2 int64
+	err := row.Scan(&id_2)
+	return id_2, err
 }
 
 const listTodos = `-- name: ListTodos :many
@@ -71,20 +50,20 @@ SELECT
     created_at,
     updated_at
 FROM todos
-WHERE title ILIKE '%' || $1 || '%'
+WHERE title ILIKE '%' || $1::text || '%'
 ORDER BY updated_at DESC, id DESC
-LIMIT $2
-OFFSET $3
+LIMIT $3::int
+OFFSET $2::int
 `
 
 type ListTodosParams struct {
-	Column1 pgtype.Text `json:"column_1"`
-	Limit   int32       `json:"limit"`
-	Offset  int32       `json:"offset"`
+	Title      string `json:"title"`
+	PageOffset int32  `json:"page_offset"`
+	PageLimit  int32  `json:"page_limit"`
 }
 
 func (q *Queries) ListTodos(ctx context.Context, arg ListTodosParams) ([]Todo, error) {
-	rows, err := q.db.Query(ctx, listTodos, arg.Column1, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listTodos, arg.Title, arg.PageOffset, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}

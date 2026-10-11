@@ -30,9 +30,7 @@ func main() {
 
 	e := echo.New()
 
-	router.Register(e)
-
-	_ = queries
+	router.Register(e, queries)
 
 	e.Logger.Fatal(e.Start(":8080"))
 }
