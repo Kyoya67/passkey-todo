@@ -96,17 +96,11 @@ kyoya67-todo/
 
 `backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`はフロントエンドを管理し、バックエンドとは独立したアプリケーションとして扱う。ローカルレビュー時の環境依存を減らすため、フロントエンドもコンテナ化し、バックエンド、PostgreSQLとともにComposeから起動できる構成とする。`infra/terraform/`ではAWS ECS Fargate、ECR、RDS、IAMなどのインフラ構成を管理する。
 
-`api/openapi/`では、バックエンドとフロントエンドが共有するREST APIの仕様をOpenAPIで管理する。APIのパス、リクエスト、レスポンス、ステータスコード、入力検証、エラー形式はOpenAPI定義を基準とする。
-
-Goの依存関係は`backend/go.mod`と`backend/go.sum`で管理し、フロントエンドの依存関係とは分離する。`backend/Dockerfile`はバックエンド用コンテナイメージ、`frontend/Dockerfile`はフロントエンド用コンテナイメージの作成方法を定義する。`compose.yaml`はリポジトリのルートへ配置し、ローカル環境でフロントエンド、バックエンド、PostgreSQLをまとめて起動する。
-
-ローカル環境では、原則として`docker compose up --build`でバックエンド、PostgreSQL、フロントエンドを起動し、レビュー担当者が個別のランタイムや依存パッケージを準備しなくても動作確認できる状態を目指す。クラウド環境では、フロントエンド、バックエンド、データベースをそれぞれ適切なサービスへ配置するが、ローカルComposeで利用するコンテナ化の方針と矛盾しない構成にする。
-
 #### ローカル環境の環境変数
 
 ローカルの共有設定はプロジェクト直下の`.env`で管理する。Composeは`compose.yaml`と同じディレクトリにある`.env`を、`${VARIABLE}`形式の値を置換するために自動で読み込む。
 
-`.env`の値をすべてのサービスへ自動的に渡すのではなく、`compose.yaml`の`environment`でサービスごとに必要な環境変数だけを明示する。バックエンドには`DB_HOST`、`DB_PORT`、`DB_USER`、`DB_PASSWORD`、`DB_NAME`を渡し、PostgreSQLには`POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB`として渡す。これにより、設定値は共通化しつつ、各コンテナが受け取る環境変数を制限する。
+`.env`の値をすべてのサービスへ自動的に渡すのではなく、コンテナごとに必要な環境変数だけを明示する。バックエンドには`DB_HOST`、`DB_PORT`、`DB_USER`、`DB_PASSWORD`、`DB_NAME`を渡し、PostgreSQLには`POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB`として渡す。これにより、設定値は共通化しつつ、各コンテナが受け取る環境変数を制限する。
 
 実際の`.env`はコミットせず、`.env.example`だけをリポジトリで管理する。クラウド環境の秘密情報は、Composeの`.env`ではなくSecrets ManagerやParameter Storeなどのサービスで管理する。
 
