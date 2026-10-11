@@ -109,6 +109,10 @@ Goの依存関係は`backend/go.mod`と`backend/go.sum`で管理し、フロン�
 
 実際の`.env`はコミットせず、`.env.example`だけをリポジトリで管理する。クラウド環境の秘密情報は、Composeの`.env`ではなくSecrets ManagerやParameter Storeなどのサービスで管理する。
 
+#### CORS
+
+バックエンドにはCORSミドルウェアを設定する。許可するOriginは`CORS_ALLOWED_ORIGINS`環境変数でカンマ区切りに指定し、ローカル開発ではSwagger UIと将来のフロントエンド開発サーバーのOriginを許可する。すべてのOriginを無条件に許可せず、クラウド環境では環境ごとのOriginを明示する。
+
 ---
 
 ## 2. AIの活用方針

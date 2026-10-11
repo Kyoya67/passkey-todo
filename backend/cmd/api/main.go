@@ -9,6 +9,7 @@ import (
 	"github.com/catechlounge/kyoya67-todo/backend/internal/config"
 	"github.com/catechlounge/kyoya67-todo/backend/internal/database"
 	sqlc "github.com/catechlounge/kyoya67-todo/backend/internal/database/sqlc"
+	"github.com/catechlounge/kyoya67-todo/backend/internal/middleware"
 	"github.com/catechlounge/kyoya67-todo/backend/internal/router"
 )
 
@@ -29,6 +30,7 @@ func main() {
 	queries := sqlc.New(pool)
 
 	e := echo.New()
+	e.Use(middleware.CORS(cfg.CORSAllowedOrigins))
 
 	router.Register(e, queries)
 
