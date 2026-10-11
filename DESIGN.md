@@ -232,10 +232,6 @@ AIの具体的な利用履歴、代表的なプロンプト、採用・修正・
 - 正常時：204
 - 指定したTODOが存在しない場合：404
 
-APIの具体的なURL、リクエスト・レスポンス形式、入力検証、エラー仕様はOpenAPIで定義する。OpenAPI定義をAPI仕様の正とするSpec-first方針を採用し、実装と仕様のずれを減らす。
-
-`oapi-codegen`を利用して、`api/openapi/openapi.yaml`からGoのリクエスト・レスポンスモデル、Echo用のServer Interface、ルーティング登録コード、埋め込み仕様を生成する。生成コードは`backend/internal/openapi/`で管理し、直接編集せず、OpenAPI定義を修正して再生成する。Handlerは生成されたServer Interfaceを実装し、ServiceとRepositoryの業務処理・DBアクセスは手動で実装する。
-
 ### 3.2 追加機能要件
 
 - パスキー認証によるログイン
@@ -321,6 +317,14 @@ SQLまたはデータベーススキーマを変更した場合は、開発時�
 | △ | GraphQL Schema | 課題文の追加要件であるGraphQLを実装する場合に、Query、Mutation、型、入力値を定義する。GraphQLを実装する余裕がある場合に採用する |
 | △ | Protocol Buffers（`.proto`） + Connect | Connectを追加で採用する場合に、RPCメソッドとメッセージ型を定義する。課題文にConnectの指定はないため、gRPCやGraphQLより優先しない |
 | — | AsyncAPI | 現時点ではイベント駆動のメッセージングを実装しないため採用しない |
+
+#### OpenAPI・oapi-codegenの採用経緯
+
+APIの具体的なURL、リクエスト・レスポンス形式、入力検証、エラー仕様を仕様書として共有するため、OpenAPIを採用する。OpenAPI定義をAPI仕様の正とするSpec-first方針により、フロントエンド、Swagger UI、バックエンド実装の認識を揃え、実装と仕様のずれを減らす。
+
+さらに、OpenAPIの定義とGo/Echoの実装を手動で別々に管理すると、パス、パラメータ、リクエスト・レスポンス型の不整合が発生しやすい。そのため、`oapi-codegen`を利用して、`api/openapi/openapi.yaml`からGoのリクエスト・レスポンスモデル、Echo用のServer Interface、ルーティング登録コード、埋め込み仕様を生成する。
+
+生成コードは`backend/internal/openapi/`で管理し、直接編集せず、OpenAPI定義を修正して再生成する。Handlerは生成されたServer Interfaceを実装し、ServiceとRepositoryの業務処理・DBアクセスは手動で実装する。これにより、API契約とHandlerの不整合をコンパイル時に検出しやすくする。
 
 ### 4.6 コンテナ実行環境
 
