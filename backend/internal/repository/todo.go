@@ -7,10 +7,17 @@ import (
 )
 
 type TodoRepository struct {
-	queries *sqlc.Queries
+	queries todoQueries
 }
 
-func NewTodoRepository(queries *sqlc.Queries) *TodoRepository {
+type todoQueries interface {
+	CreateTodo(context.Context, string) (sqlc.Todo, error)
+	ListTodos(context.Context, sqlc.ListTodosParams) ([]sqlc.Todo, error)
+	UpdateTodo(context.Context, sqlc.UpdateTodoParams) (sqlc.Todo, error)
+	DeleteTodo(context.Context, int64) (int64, error)
+}
+
+func NewTodoRepository(queries todoQueries) *TodoRepository {
 	return &TodoRepository{
 		queries: queries,
 	}
