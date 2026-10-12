@@ -406,6 +406,14 @@ Terraformのルート設定からAWSサービス単位のモジュールを呼�
 
 RDSはプライベートサブネットに配置し、ALBはパブリックサブネットに配置する。ECSタスクはコストを抑えるため初期のdesired countを0とし、必要時だけ起動する。RDSの`rds.force_ssl`を有効化し、ECSでは`sslmode=verify-full`とAWS RDS CAバンドルを指定する。ローカルComposeではPostgreSQLがTLS未設定のため、`DB_SSLMODE=disable`を既定値とし、環境変数で接続設定を切り替える。
 
+### 5.4 DBパスワード管理
+
+RDSの管理ユーザーパスワードは、Terraformの`ephemeral`変数として実行時に受け取る。`ephemeral`により、パスワードをTerraform stateへ保存しない。RDSの`password_wo`とSecrets Managerの`secret_string_wo`を使用し、TerraformからAWSへパスワードを書き込むが、AWSからTerraformへパスワードを読み戻さないwrite-only方式を採用する。
+
+RDSとSecrets Managerへ同じパスワードを渡す必要があるため、パスワード変更時は`db_password_version`を増やす。このバージョン番号を`password_wo_version`と`secret_string_wo_version`へ渡し、write-only値の更新をTerraformへ明示する。バージョン番号は自動ローテーション機能ではなく、手動更新の世代管理に使用する。
+
+実際のパスワードはリポジトリへ保存せず、ローカルでは`infra/.env`、AWS環境では実行環境のSecretへ注入する。write-onlyや`ephemeral`を使用しても、シェル履歴、ログ、CI/CDの設定などに値が残る可能性はあるため、これらも秘密情報として管理する。
+
 ---
 
 ## 6. CI/CD
