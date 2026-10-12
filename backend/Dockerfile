@@ -17,6 +17,6 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=builder /out/api /app/api
 
-EXPOSE 8080
+EXPOSE ${BACKEND_CONTAINER_PORT}
 
 ENTRYPOINT ["/app/api"]
