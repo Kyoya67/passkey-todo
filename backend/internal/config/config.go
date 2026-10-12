@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+	AppPort           string
 	DBHost             string
 	DBPort             string
 	DBUser             string
@@ -21,6 +22,7 @@ func Load() (*Config, error) {
 	_ = godotenv.Load("../.env")
 
 	config := &Config{
+		AppPort:           os.Getenv("APP_PORT"),
 		DBHost:             os.Getenv("DB_HOST"),
 		DBPort:             os.Getenv("DB_PORT"),
 		DBUser:             os.Getenv("DB_USER"),
@@ -29,7 +31,8 @@ func Load() (*Config, error) {
 		CORSAllowedOrigins: splitCSV(os.Getenv("CORS_ALLOWED_ORIGINS")),
 	}
 
-	if config.DBHost == "" ||
+	if config.AppPort == "" ||
+		config.DBHost == "" ||
 		config.DBPort == "" ||
 		config.DBUser == "" ||
 		config.DBPassword == "" ||

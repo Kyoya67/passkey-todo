@@ -34,5 +34,5 @@ func main() {
 
 	router.Register(e, queries)
 
-	e.Logger.Fatal(e.Start(":8080"))
+	e.Logger.Fatal(e.Start(":" + cfg.AppPort))
 }

@@ -1,4 +1,24 @@
 services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        BACKEND_CONTAINER_PORT: ${BACKEND_CONTAINER_PORT}
+    environment:
+      APP_PORT: ${BACKEND_CONTAINER_PORT}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_CONTAINER_PORT}"
+    depends_on:
+      db:
+        condition: service_healthy
+
   db:
     image: postgres:16
     environment:

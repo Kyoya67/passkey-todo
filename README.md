@@ -2,7 +2,7 @@
 
 ## ローカル開発環境
 
-現時点では、PostgreSQLをDockerコンテナで起動し、Go/Echoのバックエンドはホスト上で起動する。
+バックエンド、PostgreSQL、Swagger UIをDocker Composeで起動する。
 
 ### 前提
 
@@ -60,16 +60,16 @@ go fmt ./...
 go test ./...
 `````
 
-### バックエンドの起動
+### アプリケーションの起動
 
-別のターミナルで、`backend`ディレクトリから実行する。`godotenv`がプロジェクトルートの`.env`を読み込むため、手動で`export`する必要はない。
+プロジェクトルートで実行する。ComposeがPostgreSQLのhealthcheck成功後にバックエンドを起動する。
 
 `````sh
-cd backend
-go run ./cmd/api
+docker compose up -d --build
+docker compose ps
 `````
 
-起動時にPostgreSQLへ接続できない場合、バックエンドはエラー終了する。
+`backend`と`db`が起動し、`db`が`healthy`になっていることを確認する。Swagger UIは`http://localhost:8081`で利用できる。
 
 ### 動作確認
 
@@ -81,20 +81,25 @@ curl -i http://localhost:8080/health
 
 HTTP 200とJSONレスポンスが返れば、Echoサーバーが起動している。
 
+TODO APIの確認例：
+
+`````sh
+curl -i -X POST http://localhost:8080/todos \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"買い物をする"}'
+curl -i 'http://localhost:8080/todos?title=買い物'
+curl -i -X PUT http://localhost:8080/todos/1 \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"買い物を完了する"}'
+curl -i -X DELETE http://localhost:8080/todos/1
+`````
+
 ### 停止
 
-バックエンドを起動しているターミナルで`Ctrl+C`を押し、Goアプリを停止する。その後、プロジェクトルートでPostgreSQLを停止する。
+プロジェクトルートでComposeのサービスを停止する。
 
 `````sh
 docker compose down
 `````
 
 `docker compose down -v`を実行するとPostgreSQLのボリュームも削除されるため、保存データを削除する場合以外は使用しない。
-
-## 現時点の対象外
-
-- Goアプリ用Dockerfile
-- GoアプリとPostgreSQLのコンテナ起動
-- TODO 4 APIの動作確認
-
-これらはIssue #4以降で対応する。
