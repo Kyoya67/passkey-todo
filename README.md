@@ -161,13 +161,6 @@ go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0 \
 
 開発中にOpenAI Codexを利用している。利用箇所、採用理由、開発者による修正・判断、検証方法、代表的なプロンプトは[ai-usage/](ai-usage/)にPRごとに記録している。
 
-### 提出前の確認
-
-- 選考課題の提出期限は受験開始2週間後の23:59である
-- リポジトリは`catechlounge` Organization内のPrivateリポジトリとして管理する
-- [ASSIGNMENT.md](ASSIGNMENT.md)の必須要件と提出条件を確認する
-- ローカル起動、4つの必須API、テスト、OpenAPI仕様を確認する
-
 ### 停止
 
 プロジェクトルートでComposeのサービスを停止する。
