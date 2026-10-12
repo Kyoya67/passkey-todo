@@ -78,7 +78,8 @@ kyoya67-todo/
 │   │   └── repository/
 │   ├── go.mod
 │   ├── go.sum
-│   └── Dockerfile
+│   ├── Dockerfile
+│   └── TESTING.md
 ├── frontend/
 ├── api/
 │   └── openapi/
