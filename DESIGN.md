@@ -104,6 +104,12 @@ kyoya67-todo/
 
 実際の`.env`はコミットせず、`.env.example`だけをリポジトリで管理する。クラウド環境の秘密情報は、Composeの`.env`ではなくSecrets ManagerやParameter Storeなどのサービスで管理する。
 
+#### Docker Composeによるローカル起動
+
+`backend/Dockerfile`はGoのバックエンドコンテナイメージを作成するマルチステージDockerfileとし、ローカル環境とAWS ECS Fargateで共通利用する。実行環境固有の設定はDockerfileに埋め込まず、ローカルでは`compose.yaml`、AWSではECSタスク定義から環境変数・シークレットを注入する。
+
+`compose.yaml`では、バックエンド、PostgreSQL、Swagger UIを別々のコンテナとして起動する。バックエンドはComposeネットワーク上のサービス名`db`をDBホストとして利用し、PostgreSQLのhealthcheckが成功してから起動する。バックエンドのコンテナ内部ポートは`BACKEND_CONTAINER_PORT`で管理し、Goアプリの待受ポート、Dockerfileの`EXPOSE`、Composeのコンテナ側ポートへ同じ値を渡す。ホスト側の公開ポートはルート`.env`の`BACKEND_PORT`、`DB_PORT`、`SWAGGER_UI_PORT`で変更できる。
+
 #### CORS
 
 バックエンドにはCORSミドルウェアを設定する。許可するOriginは`CORS_ALLOWED_ORIGINS`環境変数でカンマ区切りに指定し、ローカル開発ではSwagger UIと将来のフロントエンド開発サーバーのOriginを許可する。すべてのOriginを無条件に許可せず、クラウド環境では環境ごとのOriginを明示する。
