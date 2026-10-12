@@ -20,6 +20,7 @@ variable "db_password" {
   type        = string
   sensitive   = true
   description = "Master password for RDS PostgreSQL. Supply through TF_VAR_db_password."
+  ephemeral   = true
   nullable    = false
 }
 

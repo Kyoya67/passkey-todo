@@ -25,3 +25,4 @@ infra/**/crash.*.log
 infra/stg/moved.tf
 # Local environment files
 **/.envrc
+!infra/.envrc
