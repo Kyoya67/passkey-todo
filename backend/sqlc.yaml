@@ -3,7 +3,7 @@ version: "2"
 sql:
   - engine: postgresql
     queries: db/query
-    schema: db/migration
+    schema: db/migration/up
     gen:
       go:
         package: sqlc

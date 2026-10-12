@@ -46,13 +46,19 @@ docker compose ps
 
 ### マイグレーション
 
-PostgreSQLコンテナが起動している状態で、プロジェクトルートから実行する。
+PostgreSQLコンテナが起動している状態で、プロジェクトルートから実行する。`backend/db/migration/up`配下のSQLをファイル名順にすべて適用する。
 
 `````sh
-docker compose exec -T db \
-  psql -U todo -d todo \
-  < backend/db/migration/001_create_todos.sql
+make db-migrate-up
 `````
+
+取り消しが必要な開発環境では、`backend/db/migration/down`配下のSQLを新しいものから逆順に実行する。
+
+`````sh
+make db-migrate-down
+`````
+
+マイグレーションファイルを追加した場合は、`up`と`down`の両方を追加する。現時点では適用済みマイグレーションの管理機能は導入していないため、適用済みのSQLを再実行すると失敗する場合がある。
 
 テーブルを確認する。
 
