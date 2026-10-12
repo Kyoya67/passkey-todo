@@ -32,7 +32,20 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 ## internal/repository
 
-`internal/repository/todo_test.go`では、sqlcのクエリメソッドを持つFakeを差し替え、Create、List、Update、Deleteへ渡す引数、戻り値の受け渡し、Repositoryでのエラー伝播をテストしている。
+`internal/repository/todo_test.go`では、sqlcのクエリメソッドを持つFakeを差し替え、Create、List、Update、Deleteへ渡す引数、戻り値の受け渡し、Repositoryでのエラー伝播をテストしている。`internal/repository/todo_integration_test.go`では、PostgreSQLへ接続し、TODOの実保存、一覧取得、更新、更新日時、削除を検証している。
+
+| ファイル | 関数 | カバレッジ |
+|---|---|---:|
+| todo.go | NewTodoRepository | 100.0% |
+|  | Create | 100.0% |
+|  | List | 100.0% |
+|  | Update | 100.0% |
+|  | Delete | 100.0% |
+| **パッケージ合計** |  | **100.0%** |
+
+## internal/repository（統合テスト）
+
+`internal/repository/todo_integration_test.go`では、`INTEGRATION_DATABASE_URL`で指定したPostgreSQLへ接続し、Fakeを使わずにCreate、List、Update、Deleteを実行している。作成したTODOの保存、一覧取得、更新後のタイトル、`updated_at`の更新、削除後の更新失敗を検証している。
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
@@ -45,7 +58,7 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 ## カバレッジ計測結果
 
-計測コマンド：`go test ./... -coverprofile=coverage.out`、`go tool cover -func=coverage.out`
+単体テストの計測コマンド：`go test ./... -coverprofile=coverage.out`、`go tool cover -func=coverage.out`
 
 | 対象 | カバレッジ |
 |---|---:|
@@ -54,7 +67,16 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 | internal/repository | 100.0% |
 | 全パッケージ | 29.3% |
 
-全パッケージの値には、手動起動をエントリーポイントとする`cmd/api`、外部I/Oを扱うDB接続、sqlc・oapi-codegenの生成コード、Router、CORSミドルウェアが含まれる。生成コードは直接編集せず、外部I/Oを含む起動処理のテストは今後必要性を確認する。
+統合テスト単独の計測コマンド：`INTEGRATION_DATABASE_URL='postgres://todo:secret@localhost:5432/todo?sslmode=disable' go test ./internal/repository -run Integration -coverprofile=integration-only-coverage.out -count=1`、`go tool cover -func=integration-only-coverage.out`
+
+| 統合テスト対象 | カバレッジ |
+|---|---:|
+| internal/repository | 100.0% |
+| 統合テスト全体 | 100.0% |
+
+統合テストを含めた全パッケージの計測コマンドは、`INTEGRATION_DATABASE_URL='postgres://todo:secret@localhost:5432/todo?sslmode=disable' go test ./... -coverprofile=integration-coverage.out -count=1`である。この場合もHandler 93.2%、Service 90.0%、Repository 100.0%、全パッケージ29.3%となった。単体テストで既にRepositoryのGoコードを網羅しているため、統合テストを追加してもGo文単位の割合は変わらないが、実DBを通る検証範囲が増えている。
+
+全パッケージの値には、手動起動をエントリーポイントとする`cmd/api`、外部I/Oを扱うDB接続、sqlc・oapi-codegenの生成コード、Router、CORSミドルウェアが含まれる。生成コードは直接編集していない。Repositoryの統合テストは、PostgreSQL接続URLを指定した場合に実行する。
 
 ## 検証コマンド
 
@@ -64,3 +86,7 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 - `go test ./... -coverprofile=coverage.out`
 - `go tool cover -func=coverage.out`
 - `go vet ./...`
+
+PostgreSQLの統合テストは、DBコンテナとマイグレーションを準備した上で実行する。
+
+- `INTEGRATION_DATABASE_URL='postgres://todo:secret@localhost:5432/todo?sslmode=disable' go test ./internal/repository -run Integration -count=1`

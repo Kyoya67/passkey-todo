@@ -1,2 +1,2 @@
 .env
-backend/coverage.out
+backend/*coverage.out
