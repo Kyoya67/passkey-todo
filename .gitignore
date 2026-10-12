@@ -1,2 +1,27 @@
 .env
 backend/*coverage.out
+
+# Terraform local state, cache, variables, plans, and crash logs
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+*.tfplan
+
+# Infrastructure / Terraform
+infra/**/.env
+infra/**/.env.*
+!infra/**/.env.example
+infra/**/.terraform/*
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+infra/**/*.tfvars
+infra/**/*.tfvars.json
+infra/**/crash.log
+infra/**/crash.*.log
+infra/stg/moved.tf
+# Local environment files
+**/.envrc
