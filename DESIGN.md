@@ -76,6 +76,11 @@ kyoya67-todo/
 │   │   ├── handler/
 │   │   ├── service/
 │   │   └── repository/
+│   ├── db/
+│   │   ├── migration/
+│   │   │   ├── 001_create_todos.up.sql
+│   │   │   └── 001_create_todos.down.sql
+│   │   └── query/
 │   ├── go.mod
 │   ├── go.sum
 │   ├── Dockerfile
@@ -96,6 +101,8 @@ kyoya67-todo/
 ```
 
 `backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`はフロントエンドを管理し、バックエンドとは独立したアプリケーションとして扱う。ローカルレビュー時の環境依存を減らすため、フロントエンドもコンテナ化し、バックエンド、PostgreSQLとともにComposeから起動できる構成とする。`infra/terraform/`ではAWS ECS Fargate、ECR、RDS、IAMなどのインフラ構成を管理する。
+
+データベースマイグレーションは`golang-migrate`で管理する。`backend/db/migration/001_create_todos.up.sql`のようにup/downを同じバージョン番号で管理し、DB側に適用済みバージョンとdirty状態を記録する。ルートのMakefileから未適用分の適用、直前の1件のロールバック、dirty状態の手動修正を実行する。sqlcのスキーマ入力はup SQLだけに限定し、down SQLを生成コードのスキーマ解析へ混入させない。
 
 #### ローカル環境の環境変数
 

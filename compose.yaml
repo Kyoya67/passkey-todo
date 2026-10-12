@@ -35,6 +35,20 @@ services:
       timeout: 5s
       retries: 5
 
+  migration:
+    image: migrate/migrate:v4.19.0
+    profiles:
+      - migration
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend/db/migration:/migrations:ro
+    entrypoint:
+      - migrate
+      - -path=/migrations
+      - -database=postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable
+
   swagger-ui:
     image: swaggerapi/swagger-ui
     ports:
