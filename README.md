@@ -81,13 +81,26 @@ go test ./...
 
 ### 動作確認
 
-別のターミナルからHealth APIへリクエストを送信する。
+#### Swagger UIから確認する
+
+ブラウザで`http://localhost:8081`を開く。各エンドポイントを選択して「Try it out」を押し、必要なパラメータやリクエストボディを入力して「Execute」を押す。レスポンスのステータスコードとJSONを確認する。
+
+Swagger UIでは、次の4つの必須APIを順番に確認できる。
+
+1. `POST /todos`でTODOを作成する
+2. `GET /todos`で一覧を取得する
+3. `PUT /todos/{id}`で作成したTODOを更新する
+4. `DELETE /todos/{id}`で作成したTODOを削除する
+
+最初に`GET /health`を実行し、HTTP 200と`{"status":"ok"}`が返ることを確認する。
+
+#### curlから確認する
+
+Swagger UIと同じ確認をコマンドラインで再現する場合は、次のコマンドを実行する。
 
 `````sh
 curl -i http://localhost:8080/health
 `````
-
-HTTP 200とJSONレスポンスが返れば、Echoサーバーが起動している。
 
 TODO APIの確認例：
 
