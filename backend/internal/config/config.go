@@ -9,12 +9,14 @@ import (
 )
 
 type Config struct {
-	AppPort           string
+	AppPort            string
 	DBHost             string
 	DBPort             string
 	DBUser             string
 	DBPassword         string
 	DBName             string
+	DBSSLMode          string
+	DBSSLRootCert      string
 	CORSAllowedOrigins []string
 }
 
@@ -22,12 +24,14 @@ func Load() (*Config, error) {
 	_ = godotenv.Load("../.env")
 
 	config := &Config{
-		AppPort:           os.Getenv("APP_PORT"),
+		AppPort:            os.Getenv("APP_PORT"),
 		DBHost:             os.Getenv("DB_HOST"),
 		DBPort:             os.Getenv("DB_PORT"),
 		DBUser:             os.Getenv("DB_USER"),
 		DBPassword:         os.Getenv("DB_PASSWORD"),
 		DBName:             os.Getenv("DB_NAME"),
+		DBSSLMode:          getenvDefault("DB_SSLMODE", "disable"),
+		DBSSLRootCert:      os.Getenv("DB_SSLROOTCERT"),
 		CORSAllowedOrigins: splitCSV(os.Getenv("CORS_ALLOWED_ORIGINS")),
 	}
 
@@ -41,6 +45,13 @@ func Load() (*Config, error) {
 	}
 
 	return config, nil
+}
+
+func getenvDefault(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
 }
 
 func splitCSV(value string) []string {

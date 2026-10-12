@@ -67,40 +67,45 @@ kyoya67-todo/
 ├── backend/
 │   ├── cmd/
 │   │   └── api/
-│   │       └── main.go
 │   ├── internal/
 │   │   ├── config/
 │   │   ├── database/
-│   │   ├── openapi/
-│   │   ├── domain/
+│   │   │   └── sqlc/
 │   │   ├── handler/
-│   │   ├── service/
-│   │   └── repository/
-│   ├── db/
-│   │   ├── migration/
-│   │   │   ├── 001_create_todos.up.sql
-│   │   │   └── 001_create_todos.down.sql
-│   │   └── query/
-│   ├── go.mod
-│   ├── go.sum
-│   ├── Dockerfile
-│   └── TESTING.md
+│   │   ├── middleware/
+│   │   ├── openapi/
+│   │   ├── repository/
+│   │   ├── router/
+│   │   └── service/
+│   └── db/
+│       ├── migration/
+│       └── query/
 ├── frontend/
 ├── api/
 │   └── openapi/
-│       └── openapi.yaml
 ├── infra/
-│   └── terraform/
+│   └── modules/
+│       ├── alb/
+│       ├── ecr/
+│       ├── ecs/
+│       ├── iam/
+│       ├── internet_gateway/
+│       ├── logs/
+│       ├── rds/
+│       ├── route_table/
+│       ├── secrets/
+│       ├── security_groups/
+│       ├── subnet/
+│       └── vpc/
 ├── ASSIGNMENT.md
 ├── ai-usage/
-│   └── PR-17.md
 ├── compose.yaml
 ├── AGENTS.md
 ├── DESIGN.md
 └── README.md
 ```
 
-`backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`はフロントエンドを管理し、バックエンドとは独立したアプリケーションとして扱う。ローカルレビュー時の環境依存を減らすため、フロントエンドもコンテナ化し、バックエンド、PostgreSQLとともにComposeから起動できる構成とする。`infra/terraform/`ではAWS ECS Fargate、ECR、RDS、IAMなどのインフラ構成を管理する。
+`backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`はフロントエンドを管理し、バックエンドとは独立したアプリケーションとして扱う。`api/`ではバックエンドとフロントエンドで共有するAPI仕様を管理する。`infra/`ではAWS ECS Fargate、ECR、RDS、IAMなどのインフラ構成をTerraformで管理する。`ai-usage/`ではPull RequestごとのAI利用記録を管理する。
 
 データベースマイグレーションは`golang-migrate`で管理する。`backend/db/migration/001_create_todos.up.sql`のようにup/downを同じバージョン番号で管理し、DB側に適用済みバージョンとdirty状態を記録する。ルートのMakefileから未適用分の適用、直前の1件のロールバック、dirty状態の手動修正を実行する。sqlcのスキーマ入力はup SQLだけに限定し、down SQLを生成コードのスキーマ解析へ混入させない。
 
@@ -397,7 +402,17 @@ flowchart TD
     ECS -.->|Logs| CW
 ```
 
-この図は現時点で決定している技術を中心に表した概念図であり、VPC・サブネット・DBの配置・セキュリティグループなどの詳細構成は今後決定する。
+Terraformのルート設定からAWSサービス単位のモジュールを呼び出す。VPC、ネットワーク、セキュリティグループ、ALB、ECS、ECR、RDS、Secrets Manager、CloudWatch Logs、IAMを分離して管理し、ルートの`aws.tf`ではモジュール間の依存関係を接続する。
+
+RDSはプライベートサブネットに配置し、ALBはパブリックサブネットに配置する。ECSタスクはコストを抑えるため初期のdesired countを0とし、必要時だけ起動する。RDSの`rds.force_ssl`を有効化し、ECSでは`sslmode=verify-full`とAWS RDS CAバンドルを指定する。ローカルComposeではPostgreSQLがTLS未設定のため、`DB_SSLMODE=disable`を既定値とし、環境変数で接続設定を切り替える。
+
+### 5.4 DBパスワード管理
+
+RDSの管理ユーザーパスワードは、Terraformの`ephemeral`変数として実行時に受け取る。`ephemeral`により、パスワードをTerraform stateへ保存しない。RDSの`password_wo`とSecrets Managerの`secret_string_wo`を使用し、TerraformからAWSへパスワードを書き込むが、AWSからTerraformへパスワードを読み戻さないwrite-only方式を採用する。
+
+RDSとSecrets Managerへ同じパスワードを渡す必要があるため、パスワード変更時は`db_password_version`を増やす。このバージョン番号を`password_wo_version`と`secret_string_wo_version`へ渡し、write-only値の更新をTerraformへ明示する。バージョン番号は自動ローテーション機能ではなく、手動更新の世代管理に使用する。
+
+実際のパスワードはリポジトリへ保存せず、ローカルでは`infra/.env`、AWS環境では実行環境のSecretへ注入する。write-onlyや`ephemeral`を使用しても、シェル履歴、ログ、CI/CDの設定などに値が残る可能性はあるため、これらも秘密情報として管理する。
 
 ---
 
