@@ -46,19 +46,25 @@ docker compose ps
 
 ### マイグレーション
 
-PostgreSQLコンテナが起動している状態で、プロジェクトルートから実行する。`backend/db/migration/up`配下のSQLをファイル名順にすべて適用する。
+PostgreSQLコンテナが起動している状態で、プロジェクトルートから実行する。`golang-migrate`が適用済みバージョンを管理し、未適用のSQLだけを実行する。
 
 `````sh
 make db-migrate-up
 `````
 
-取り消しが必要な開発環境では、`backend/db/migration/down`配下のSQLを新しいものから逆順に実行する。
+開発環境で直前のマイグレーションを一つ取り消す場合は、次を実行する。
 
 `````sh
 make db-migrate-down
 `````
 
-マイグレーションファイルを追加した場合は、`up`と`down`の両方を追加する。現時点では適用済みマイグレーションの管理機能は導入していないため、適用済みのSQLを再実行すると失敗する場合がある。
+適用途中で失敗してdirty状態になった場合は、原因を修正した上で、対象バージョンを指定して状態を修正する。
+
+`````sh
+make db-migrate-force VERSION=1
+`````
+
+マイグレーションファイルは`backend/db/migration/001_create_todos.up.sql`と`001_create_todos.down.sql`のように、同じバージョン番号のup/downを追加する。
 
 テーブルを確認する。
 
