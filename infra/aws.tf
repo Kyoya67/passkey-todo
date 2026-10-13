@@ -84,6 +84,9 @@ module "iam" {
   secret_arn         = module.secrets.arn
   log_group_arn      = module.logs.arn
   ecr_repository_arn = module.ecr.arn
+  github_repository  = "catechlounge/kyoya67-todo"
+  github_branch      = "main"
+  ecs_cluster_arn    = "arn:aws:ecs:${local.region}:${local.account_id}:cluster/${local.project}"
   tags               = local.common_tags
 }
 
