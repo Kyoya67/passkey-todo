@@ -4,6 +4,7 @@ variable "env" {
   default = "stg"
 }
 variable "image" { type = string }
+variable "migration_image" { type = string }
 variable "port" { type = number }
 variable "cluster_name" { type = string }
 variable "subnet_ids" { type = list(string) }

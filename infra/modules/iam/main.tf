@@ -90,6 +90,18 @@ data "aws_iam_policy_document" "github_actions" {
   }
 
   statement {
+    sid = "EcrMigrationPush"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:CompleteLayerUpload",
+      "ecr:InitiateLayerUpload",
+      "ecr:PutImage",
+      "ecr:UploadLayerPart",
+    ]
+    resources = [var.migration_ecr_repository_arn]
+  }
+
+  statement {
     sid       = "EcrAuth"
     actions   = ["ecr:GetAuthorizationToken"]
     resources = ["*"]

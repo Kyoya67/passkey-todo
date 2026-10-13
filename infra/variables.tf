@@ -36,6 +36,12 @@ variable "backend_image" {
   default     = ""
 }
 
+variable "migration_image" {
+  type        = string
+  description = "Migration container image URI in ECR."
+  default     = ""
+}
+
 variable "backend_port" {
   type        = number
   description = "Port exposed by the backend container."
