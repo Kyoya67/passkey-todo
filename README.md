@@ -53,7 +53,7 @@ docker compose ps
 npx serve frontend -l 3000
 `````
 
-ブラウザで`http://localhost:3000`を開く。画面上のAPI URLには、ローカルバックエンドを確認する場合は`http://localhost:8080`、AWS上のAPIを確認する場合は`https://api.ca-techlounge-todo.kyo8.dev`を指定する。
+ブラウザで`http://localhost:3000`を開く。画面上のAPI URLは、ローカルバックエンドを確認するため`http://localhost:8080`を初期値にしている。AWS上のAPIを確認する場合のみ、画面上で`https://api.ca-techlounge-todo.kyo8.dev`へ変更する。
 
 ### マイグレーション
 
@@ -174,18 +174,18 @@ go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0 \
 
 ## AWS ECS Serviceの起動・停止
 
-ECS Serviceはコストを抑えるため、通常はタスク数（desired count）を`0`にして停止する。APIを確認するときだけ、プロジェクトルートで次のコマンドを実行してタスク数を`1`にする。AWS CLIの認証には、Terraform適用時に使用したAWSプロファイルを設定する。
+ECS Serviceはコストを抑えるため、通常はタスク数（desired count）を`0`にして停止する。APIを確認するときだけ、プロジェクトルートで次のMakeコマンドを実行してタスク数を`1`にする。ECSの起動・停止・状態確認処理はMakefileにまとめている。
 
 `````sh
-AWS_PROFILE=ca-techlounge-todo-terraform make ecs-start
-AWS_PROFILE=ca-techlounge-todo-terraform make ecs-status
+make ecs-start
+make ecs-status
 `````
 
 確認が終わったら、タスク数を`0`に戻す。
 
 `````sh
-AWS_PROFILE=ca-techlounge-todo-terraform make ecs-stop
-AWS_PROFILE=ca-techlounge-todo-terraform make ecs-status
+make ecs-stop
+make ecs-status
 `````
 
 `ecs-start`はECSタスクを1つ起動し、`ecs-stop`は0にして停止する。停止しても、ECS Service、ECR、ALB、RDS、CloudWatch Logsなどのリソースは削除されないため、料金が発生する場合がある。利用しない時間帯はServiceを停止し、AWSコンソールまたはAWS CLIで料金とリソース状態を確認する。
