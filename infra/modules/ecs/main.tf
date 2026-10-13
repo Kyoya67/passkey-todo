@@ -34,7 +34,8 @@ resource "aws_ecs_task_definition" "this" {
       { name = "DB_PORT", value = "5432" },
       { name = "DB_NAME", value = "todo" },
       { name = "DB_SSLMODE", value = "verify-full" },
-      { name = "DB_SSLROOTCERT", value = "/etc/ssl/certs/rds-global-bundle.pem" }
+      { name = "DB_SSLROOTCERT", value = "/etc/ssl/certs/rds-global-bundle.pem" },
+      { name = "CORS_ALLOWED_ORIGINS", value = var.cors_allowed_origins }
     ]
     secrets = [
       { name = "DB_USER", valueFrom = "${var.secret_arn}:username::" },
