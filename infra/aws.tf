@@ -89,7 +89,6 @@ module "iam" {
   ecs_cluster_arn    = "arn:aws:ecs:${local.region}:${local.account_id}:cluster/${local.project}"
   tags               = local.common_tags
 }
-
 module "ecs" {
   source = "./modules/ecs"
 
@@ -104,7 +103,6 @@ module "ecs" {
   secret_arn         = module.secrets.arn
   log_group_name     = module.logs.name
   database_host      = module.rds.address
-  desired_count      = 0
   region             = local.region
   tags               = local.common_tags
 }
@@ -126,6 +124,13 @@ resource "aws_ecs_service" "backend" {
   task_definition = module.ecs.task_definition_arn
   desired_count   = 0
   launch_type     = "FARGATE"
+
+  lifecycle {
+    ignore_changes = [
+      desired_count,
+      task_definition,
+    ]
+  }
 
   network_configuration {
     subnets          = module.subnet.public_subnet_ids
