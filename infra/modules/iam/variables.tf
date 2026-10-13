@@ -5,4 +5,5 @@ variable "ecr_repository_arn" { type = string }
 variable "github_repository" { type = string }
 variable "github_branch" { type = string }
 variable "ecs_cluster_arn" { type = string }
+variable "amplify_app_arn" { type = string }
 variable "tags" { type = map(string) }
