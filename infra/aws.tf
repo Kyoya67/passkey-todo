@@ -128,6 +128,15 @@ module "route53" {
   tags         = local.common_tags
 }
 
+module "amplify" {
+  source = "./modules/amplify"
+
+  name        = "${local.project}-frontend"
+  branch_name = "main"
+  domain_name = "ca-techlounge-todo.kyo8.dev"
+  tags        = local.common_tags
+}
+
 resource "aws_ecs_service" "backend" {
   name            = local.project
   cluster         = module.ecs.cluster_id

@@ -86,6 +86,7 @@ kyoya67-todo/
 ├── infra/
 │   └── modules/
 │       ├── alb/
+│       ├── amplify/
 │       ├── ecr/
 │       ├── ecs/
 │       ├── iam/
@@ -106,7 +107,7 @@ kyoya67-todo/
 └── README.md
 ```
 
-`backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`はフロントエンドを管理し、バックエンドとは独立したアプリケーションとして扱う。`api/`ではバックエンドとフロントエンドで共有するAPI仕様を管理する。`infra/`ではAWS ECS Fargate、ECR、RDS、IAM、Route 53などのインフラ構成をTerraformで管理する。`ai-usage/`ではPull RequestごとのAI利用記録を管理する。
+`backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`は静的フロントエンドを管理し、AWS Amplify Hostingで配信する。バックエンドとは独立したアプリケーションとして扱う。`api/`ではバックエンドとフロントエンドで共有するAPI仕様を管理する。`infra/`ではAWS ECS Fargate、ECR、RDS、IAM、Route 53、Amplifyなどのインフラ構成をTerraformで管理する。`ai-usage/`ではPull RequestごとのAI利用記録を管理する。
 
 Route 53では委任済みの`ca-techlounge-todo.kyo8.dev`のホストゾーンを管理し、`api.ca-techlounge-todo.kyo8.dev`をALBへ向けるAliasレコードを作成する。親ドメイン`kyo8.dev`を管理するドメインレジストラ側で、Route 53が出力するネームサーバーを委任先として設定する。ACM証明書とALBのHTTPSリスナーは別の構成として扱う。
 

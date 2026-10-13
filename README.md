@@ -15,13 +15,14 @@
 
 ## ローカル開発環境
 
-バックエンド、PostgreSQL、Swagger UIをDocker Composeで起動する。
+バックエンド、PostgreSQL、Swagger UIをDocker Composeで起動する。フロントエンドはNode.jsの静的HTTPサーバーで配信する。
 
 ### 前提
 
 - Go
 - Docker Desktop
 - Docker Compose
+- Node.js（`npx`を含む）
 - sqlc
 
 ### 環境変数
@@ -43,6 +44,16 @@ docker compose ps
 `````
 
 `backend`、`db`、`swagger-ui`が起動し、`db`サービスが`healthy`になっていることを確認する。Swagger UIは`http://localhost:8081`で利用できる。
+
+### フロントエンドの起動
+
+別のターミナルでプロジェクトルートから実行する。
+
+`````sh
+npx serve frontend -l 3000
+`````
+
+ブラウザで`http://localhost:3000`を開く。画面上のAPI URLには、ローカルバックエンドを確認する場合は`http://localhost:8080`、AWS上のAPIを確認する場合は`https://api.ca-techlounge-todo.kyo8.dev`を指定する。
 
 ### マイグレーション
 
