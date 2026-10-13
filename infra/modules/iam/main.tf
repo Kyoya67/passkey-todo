@@ -111,6 +111,16 @@ data "aws_iam_policy_document" "github_actions" {
     actions   = ["iam:PassRole"]
     resources = [aws_iam_role.execution.arn, aws_iam_role.task.arn]
   }
+
+  statement {
+    sid = "AmplifyDeploy"
+    actions = [
+      "amplify:CreateDeployment",
+      "amplify:GetJob",
+      "amplify:StartDeployment",
+    ]
+    resources = ["${var.amplify_app_arn}/branches/${var.github_branch}/deployments/*"]
+  }
 }
 
 resource "aws_iam_role_policy" "github_actions" {

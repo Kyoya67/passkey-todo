@@ -87,6 +87,7 @@ module "iam" {
   github_repository  = "catechlounge@134475136/kyoya67-todo@1410211307"
   github_branch      = "main"
   ecs_cluster_arn    = "arn:aws:ecs:${local.region}:${local.account_id}:cluster/${local.project}"
+  amplify_app_arn    = module.amplify.app_arn
   tags               = local.common_tags
 }
 module "ecs" {
