@@ -190,6 +190,10 @@ make ecs-status
 
 `ecs-start`はECSタスクを1つ起動し、`ecs-stop`は0にして停止する。停止しても、ECS Service、ECR、ALB、RDS、CloudWatch Logsなどのリソースは削除されないため、料金が発生する場合がある。利用しない時間帯はServiceを停止し、AWSコンソールまたはAWS CLIで料金とリソース状態を確認する。
 
+### GitHub ActionsのCD
+
+`main`へのマージ後、変更されたディレクトリに応じて必要なデプロイだけを実行する。バックエンドはECR・ECSへ、フロントエンドはAmplifyへデプロイする。フロントエンドのデプロイには、GitHubリポジトリ変数`AMPLIFY_APP_ID`を設定する。
+
 ### 停止
 
 プロジェクトルートでComposeのサービスを停止する。

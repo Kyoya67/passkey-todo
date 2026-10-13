@@ -433,4 +433,17 @@ AWS環境は1つのみとし、`main`へのマージをAWSデプロイの基準�
 
 ### 6.2 CI
 
+CIはPull Requestで実行し、次の検証を行う。
+
+- バックエンド：`go test ./...`、`go vet ./...`
+- sqlc：`sqlc vet`、`sqlc generate`を実行し、生成コードに未コミットの差分がないことを確認
+- Terraform：`terraform fmt -check -recursive`、`terraform init -backend=false`、`terraform validate`
+- コンテナ：バックエンドのDockerイメージをビルド
+
+CIではAWSへのデプロイは行わず、コードとTerraform構成の静的・ビルド検証に限定する。
+
 ### 6.3 CD
+
+CDは`main`へのpushを起点に実行する。変更されたパスを判定し、`backend/`またはAPI仕様・CD設定に変更がある場合だけバックエンドをECR・ECSへデプロイする。`frontend/`またはCD設定に変更がある場合だけ、Gitリポジトリに接続していないAmplifyへ静的ファイルを手動デプロイする。バックエンドとフロントエンドは独立したジョブとして実行する。
+
+Amplifyの手動デプロイでは、GitHub ActionsがフロントエンドをZIP化し、Amplifyのデプロイ用アップロードURLへ転送した後、デプロイを開始して完了状態を確認する。AmplifyアプリIDはGitHubリポジトリ変数で管理し、AWS認証はOIDCを使用する。
