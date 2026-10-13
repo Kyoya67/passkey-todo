@@ -116,10 +116,15 @@ data "aws_iam_policy_document" "github_actions" {
     sid = "AmplifyDeploy"
     actions = [
       "amplify:CreateDeployment",
-      "amplify:GetJob",
       "amplify:StartDeployment",
     ]
     resources = ["${var.amplify_app_arn}/branches/${var.github_branch}/deployments/*"]
+  }
+
+  statement {
+    sid       = "AmplifyGetJob"
+    actions   = ["amplify:GetJob"]
+    resources = ["${var.amplify_app_arn}/branches/${var.github_branch}/jobs/*"]
   }
 }
 
