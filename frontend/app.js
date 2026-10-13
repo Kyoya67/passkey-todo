@@ -9,9 +9,10 @@ const apiURL = () => {
   return defaultAPIURL;
 };
 const request = async (path, options = {}) => {
+  const headers = options.body ? { 'Content-Type': 'application/json' } : {};
   const response = await fetch(`${apiURL()}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: { ...headers, ...options.headers },
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.status === 204 ? null : response.json();
