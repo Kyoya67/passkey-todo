@@ -92,6 +92,7 @@ kyoya67-todo/
 │       ├── internet_gateway/
 │       ├── logs/
 │       ├── rds/
+│       ├── route53/
 │       ├── route_table/
 │       ├── secrets/
 │       ├── security_groups/
@@ -105,7 +106,9 @@ kyoya67-todo/
 └── README.md
 ```
 
-`backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`はフロントエンドを管理し、バックエンドとは独立したアプリケーションとして扱う。`api/`ではバックエンドとフロントエンドで共有するAPI仕様を管理する。`infra/`ではAWS ECS Fargate、ECR、RDS、IAMなどのインフラ構成をTerraformで管理する。`ai-usage/`ではPull RequestごとのAI利用記録を管理する。
+`backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`はフロントエンドを管理し、バックエンドとは独立したアプリケーションとして扱う。`api/`ではバックエンドとフロントエンドで共有するAPI仕様を管理する。`infra/`ではAWS ECS Fargate、ECR、RDS、IAM、Route 53などのインフラ構成をTerraformで管理する。`ai-usage/`ではPull RequestごとのAI利用記録を管理する。
+
+Route 53では`kyo8.dev`のホストゾーンを管理し、`api.kyo8.dev`をALBへ向けるAliasレコードを作成する。ドメインレジストラ側で、Route 53が出力するネームサーバーを設定する。ACM証明書とALBのHTTPSリスナーは別の構成として扱う。
 
 データベースマイグレーションは`golang-migrate`で管理する。`backend/db/migration/001_create_todos.up.sql`のようにup/downを同じバージョン番号で管理し、DB側に適用済みバージョンとdirty状態を記録する。ルートのMakefileから未適用分の適用、直前の1件のロールバック、dirty状態の手動修正を実行する。sqlcのスキーマ入力はup SQLだけに限定し、down SQLを生成コードのスキーマ解析へ混入させない。
 
