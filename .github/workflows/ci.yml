@@ -14,7 +14,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      terraform: ${{ steps.filter.outputs.terraform }}
+      container: ${{ steps.filter.outputs.container }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed components
+        id: filter
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -eu
+          changed_files="$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")"
+
+          if printf '%s\n' "${changed_files}" | grep -Eq '^(backend/|api/|\.github/workflows/ci\.yml$)'; then
+            echo "backend=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "backend=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if printf '%s\n' "${changed_files}" | grep -Eq '^(infra/|\.github/workflows/ci\.yml$)'; then
+            echo "terraform=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "terraform=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if printf '%s\n' "${changed_files}" | grep -Eq '^(backend/|\.github/workflows/ci\.yml$)'; then
+            echo "container=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "container=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if printf '%s\n' "${changed_files}" | grep -Eq '^(frontend/|\.github/workflows/ci\.yml$)'; then
+            echo "frontend=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "frontend=false" >> "${GITHUB_OUTPUT}"
+          fi
+
   backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -43,6 +93,8 @@ jobs:
           git diff --exit-code -- internal/database/sqlc
 
   terraform:
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -67,6 +119,8 @@ jobs:
         run: terraform validate
 
   container:
+    needs: changes
+    if: needs.changes.outputs.container == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -75,3 +129,27 @@ jobs:
 
       - name: Build backend image
         run: docker build --file backend/Dockerfile --tag kyoya67-todo-backend:ci backend
+
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Check frontend format
+        working-directory: frontend
+        run: npm run format:check

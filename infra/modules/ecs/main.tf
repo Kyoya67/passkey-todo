@@ -21,6 +21,13 @@ resource "aws_ecs_task_definition" "this" {
       hostPort      = var.port
       protocol      = "tcp"
     }]
+    healthCheck = {
+      command     = ["CMD-SHELL", "curl --fail --silent http://localhost:${var.port}/health || exit 1"]
+      interval    = 30
+      timeout     = 5
+      retries     = 3
+      startPeriod = 10
+    }
     environment = [
       { name = "APP_PORT", value = tostring(var.port) },
       { name = "DB_HOST", value = var.database_host },

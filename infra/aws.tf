@@ -89,7 +89,6 @@ module "iam" {
   ecs_cluster_arn    = "arn:aws:ecs:${local.region}:${local.account_id}:cluster/${local.project}"
   tags               = local.common_tags
 }
-
 module "ecs" {
   source = "./modules/ecs"
 
@@ -104,7 +103,6 @@ module "ecs" {
   secret_arn         = module.secrets.arn
   log_group_name     = module.logs.name
   database_host      = module.rds.address
-  desired_count      = 0
   region             = local.region
   tags               = local.common_tags
 }
@@ -120,12 +118,38 @@ module "alb" {
   tags              = local.common_tags
 }
 
+module "route53" {
+  source = "./modules/route53"
+
+  zone_name    = "ca-techlounge-todo.kyo8.dev"
+  record_name  = "api.ca-techlounge-todo.kyo8.dev"
+  alb_dns_name = module.alb.dns_name
+  alb_zone_id  = module.alb.zone_id
+  tags         = local.common_tags
+}
+
+module "amplify" {
+  source = "./modules/amplify"
+
+  name        = "${local.project}-frontend"
+  branch_name = "main"
+  domain_name = "ca-techlounge-todo.kyo8.dev"
+  tags        = local.common_tags
+}
+
 resource "aws_ecs_service" "backend" {
   name            = local.project
   cluster         = module.ecs.cluster_id
   task_definition = module.ecs.task_definition_arn
   desired_count   = 0
   launch_type     = "FARGATE"
+
+  lifecycle {
+    ignore_changes = [
+      desired_count,
+      task_definition,
+    ]
+  }
 
   network_configuration {
     subnets          = module.subnet.public_subnet_ids
@@ -140,4 +164,12 @@ resource "aws_ecs_service" "backend" {
   }
 
   tags = local.common_tags
+}
+
+output "api_domain_name" {
+  value = module.route53.record_name
+}
+
+output "route53_name_servers" {
+  value = module.route53.name_servers
 }

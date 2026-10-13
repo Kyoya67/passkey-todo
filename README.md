@@ -15,13 +15,14 @@
 
 ## ローカル開発環境
 
-バックエンド、PostgreSQL、Swagger UIをDocker Composeで起動する。
+バックエンド、PostgreSQL、Swagger UIをDocker Composeで起動する。フロントエンドはNode.jsの静的HTTPサーバーで配信する。
 
 ### 前提
 
 - Go
 - Docker Desktop
 - Docker Compose
+- Node.js（`npx`を含む）
 - sqlc
 
 ### 環境変数
@@ -43,6 +44,19 @@ docker compose ps
 `````
 
 `backend`、`db`、`swagger-ui`が起動し、`db`サービスが`healthy`になっていることを確認する。Swagger UIは`http://localhost:8081`で利用できる。
+
+### フロントエンドの起動
+
+別のターミナルでプロジェクトルートから実行する。
+
+`````sh
+cd frontend
+npm ci
+cd ..
+npx serve frontend -l 3000
+`````
+
+ブラウザで`http://localhost:3000`を開く。画面上のAPI URLは、ローカルバックエンドを確認するため`http://localhost:8080`を初期値にしている。AWS上のAPIを確認する場合のみ、画面上で`https://api.ca-techlounge-todo.kyo8.dev`へ変更する。
 
 ### マイグレーション
 
@@ -160,6 +174,28 @@ go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0 \
 ### 生成AIの利用
 
 開発中にOpenAI Codexを利用している。利用箇所、採用理由、開発者による修正・判断、検証方法、代表的なプロンプトは[ai-usage/](ai-usage/)にPRごとに記録している。
+
+## AWS ECS Serviceの起動・停止
+
+ECS Serviceはコストを抑えるため、通常はタスク数（desired count）を`0`にして停止する。APIを確認するときだけ、プロジェクトルートで次のMakeコマンドを実行してタスク数を`1`にする。ECSの起動・停止・状態確認処理はMakefileにまとめている。
+
+`````sh
+make ecs-start
+make ecs-status
+`````
+
+確認が終わったら、タスク数を`0`に戻す。
+
+`````sh
+make ecs-stop
+make ecs-status
+`````
+
+`ecs-start`はECSタスクを1つ起動し、`ecs-stop`は0にして停止する。停止しても、ECS Service、ECR、ALB、RDS、CloudWatch Logsなどのリソースは削除されないため、料金が発生する場合がある。利用しない時間帯はServiceを停止し、AWSコンソールまたはAWS CLIで料金とリソース状態を確認する。
+
+### GitHub ActionsのCD
+
+`main`へのマージ後、変更されたディレクトリに応じて必要なデプロイだけを実行する。バックエンドはECR・ECSへ、フロントエンドはAmplifyへデプロイする。フロントエンドのデプロイには、GitHubリポジトリ変数`AMPLIFY_APP_ID`を設定する。
 
 ### 停止
 
