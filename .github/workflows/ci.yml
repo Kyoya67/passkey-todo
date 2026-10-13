@@ -38,8 +38,8 @@ jobs:
       - name: Validate SQL and generated code
         working-directory: backend
         run: |
-          go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 vet
-          go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
+          go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 vet
+          go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
           git diff --exit-code -- internal/database/sqlc
 
   terraform:
