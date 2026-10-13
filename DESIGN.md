@@ -111,7 +111,7 @@ kyoya67-todo/
 
 既存ドメイン`kyo8.dev`のサブドメインとして、`ca-techlounge-todo.kyo8.dev`をフロントエンド、`api.ca-techlounge-todo.kyo8.dev`をバックエンドAPIに使用する。Route 53でDNSを管理し、ACMの証明書をAPI用ALBのHTTPSリスナーに関連付ける。
 
-データベースマイグレーションは`golang-migrate`で管理する。`backend/db/migration/001_create_todos.up.sql`のようにup/downを同じバージョン番号で管理し、DB側に適用済みバージョンとdirty状態を記録する。ルートのMakefileから未適用分の適用、直前の1件のロールバック、dirty状態の手動修正を実行する。sqlcのスキーマ入力はup SQLだけに限定し、down SQLを生成コードのスキーマ解析へ混入させない。
+データベースマイグレーションは`golang-migrate`で管理する。`backend/db/migration/001_create_todos.up.sql`のようにup/downを同じバージョン番号で管理し、DB側に適用済みバージョンとdirty状態を記録する。ルートのMakefileから未適用分の適用、直前の1件のロールバック、dirty状態の手動修正を実行する。sqlcのスキーマ入力はup SQLだけに限定し、down SQLを生成コードのスキーマ解析へ混入させない。AWSではAPI用とは別のマイグレーション用コンテナイメージとECSワンショットタスクを使用し、RDSへ接続して完了後に停止する。
 
 #### ローカル環境の環境変数
 
@@ -445,6 +445,6 @@ CIではAWSへのデプロイは行わず、コードとTerraform構成の静的
 
 ### 6.3 CD
 
-CDは`main`へのpushを起点に実行する。変更されたパスを判定し、`backend/`、`api/`、`infra/`またはCD設定に変更がある場合だけバックエンドをECR・ECSへデプロイする。`frontend/`またはCD設定に変更がある場合だけ、Gitリポジトリに接続していないAmplifyへ静的ファイルを手動デプロイする。バックエンドとフロントエンドは独立したジョブとして実行する。
+CDは`main`へのpushを起点に実行する。変更されたパスを判定し、`backend/`、`api/`、`infra/`またはCD設定に変更がある場合だけバックエンドをECR・ECSへデプロイする。バックエンドのデプロイ時にはAPI用イメージに加えてマイグレーション用イメージもECRへ登録する。RDSへのマイグレーション適用は自動実行せず、Terraformで作成したECSワンショットタスクを`make db-migrate-ecs`で明示的に実行する。`frontend/`またはCD設定に変更がある場合だけ、Gitリポジトリに接続していないAmplifyへ静的ファイルを手動デプロイする。バックエンドとフロントエンドは独立したジョブとして実行する。
 
 Amplifyの手動デプロイでは、GitHub ActionsがフロントエンドをZIP化し、Amplifyのデプロイ用アップロードURLへ転送した後、デプロイを開始して完了状態を確認する。AmplifyアプリIDはGitHubリポジトリ変数で管理し、AWS認証はOIDCを使用する。

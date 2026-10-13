@@ -47,6 +47,13 @@ module "ecr" {
   tags = local.common_tags
 }
 
+module "ecr_migration" {
+  source = "./modules/ecr"
+
+  name = "${local.project}/migration"
+  tags = local.common_tags
+}
+
 module "logs" {
   source = "./modules/logs"
 
@@ -80,21 +87,23 @@ module "rds" {
 module "iam" {
   source = "./modules/iam"
 
-  name               = local.project
-  secret_arn         = module.secrets.arn
-  log_group_arn      = module.logs.arn
-  ecr_repository_arn = module.ecr.arn
-  github_repository  = "catechlounge@134475136/kyoya67-todo@1410211307"
-  github_branch      = "main"
-  ecs_cluster_arn    = "arn:aws:ecs:${local.region}:${local.account_id}:cluster/${local.project}"
-  amplify_app_arn    = module.amplify.app_arn
-  tags               = local.common_tags
+  name                         = local.project
+  secret_arn                   = module.secrets.arn
+  log_group_arn                = module.logs.arn
+  ecr_repository_arn           = module.ecr.arn
+  migration_ecr_repository_arn = module.ecr_migration.arn
+  github_repository            = "catechlounge@134475136/kyoya67-todo@1410211307"
+  github_branch                = "main"
+  ecs_cluster_arn              = "arn:aws:ecs:${local.region}:${local.account_id}:cluster/${local.project}"
+  amplify_app_arn              = module.amplify.app_arn
+  tags                         = local.common_tags
 }
 module "ecs" {
   source = "./modules/ecs"
 
   name                 = local.project
   image                = var.backend_image != "" ? var.backend_image : module.ecr.repository_url
+  migration_image      = var.migration_image != "" ? var.migration_image : module.ecr_migration.repository_url
   port                 = var.backend_port
   cluster_name         = local.project
   subnet_ids           = module.subnet.public_subnet_ids
@@ -179,6 +188,22 @@ resource "aws_ecs_service" "backend" {
 
 output "api_domain_name" {
   value = module.route53.record_name
+}
+
+output "ecs_cluster_name" {
+  value = module.ecs.cluster_id
+}
+
+output "migration_task_definition_arn" {
+  value = module.ecs.migration_task_definition_arn
+}
+
+output "migration_subnet_ids" {
+  value = module.subnet.public_subnet_ids
+}
+
+output "ecs_security_group_id" {
+  value = module.security_groups.ecs_id
 }
 
 output "route53_name_servers" {
