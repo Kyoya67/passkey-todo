@@ -11,6 +11,7 @@ func CORS(allowedOrigins []string) echo.MiddlewareFunc {
 		AllowMethods: []string{
 			echo.GET,
 			echo.HEAD,
+			echo.OPTIONS,
 			echo.PUT,
 			echo.PATCH,
 			echo.POST,
