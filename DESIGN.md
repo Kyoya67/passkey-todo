@@ -439,6 +439,7 @@ CIはPull Requestで実行し、次の検証を行う。
 - sqlc：`sqlc vet`、`sqlc generate`を実行し、生成コードに未コミットの差分がないことを確認
 - Terraform：`terraform fmt -check -recursive`、`terraform init -backend=false`、`terraform validate`
 - コンテナ：バックエンドのDockerイメージをビルド
+- フロントエンド：Node.jsの依存関係をインストールし、Prettierのフォーマットチェック
 
 CIではAWSへのデプロイは行わず、コードとTerraform構成の静的・ビルド検証に限定する。
 

@@ -50,6 +50,9 @@ docker compose ps
 別のターミナルでプロジェクトルートから実行する。
 
 `````sh
+cd frontend
+npm ci
+cd ..
 npx serve frontend -l 3000
 `````
 
