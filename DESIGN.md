@@ -366,6 +366,8 @@ ECS Serviceは必要時のみタスク数を1に増やし、利用しない場�
 GitHub ActionsからAWSへアクセスする際はOIDCを利用する。
 長期アクセスキーをGitHub Secretsに保存せず、一時的な認証情報を利用してECR・ECSへのデプロイを行う。
 
+GitHub Actions用のOIDCプロバイダー、IAMロール、信頼ポリシー、ECR・ECS操作権限はTerraformの`infra/modules/iam/`で管理する。OIDCプロバイダーのAudienceは`sts.amazonaws.com`とし、信頼対象は対象リポジトリの`main`ブランチに限定する。GitHub ActionsのworkflowやGitHub側のVariables・Secretsはリポジトリ側で管理し、AWS側の長期アクセスキーは使用しない。
+
 ### 4.9 Go外部パッケージ
 
 | **分類** | **importするパッケージ** | **用途** |
@@ -420,7 +422,7 @@ RDSとSecrets Managerへ同じパスワードを渡す必要があるため、�
 
 ### 6.1 全体方針
 
-CIはPull Requestの作成・更新時に実行し、フォーマットチェック、静的解析、テストなどを実行する。
+CIはPull Requestの作成・更新時に実行し、Goのテスト・静的解析、sqlcのSQL検証と生成コードの差分確認、Terraformのフォーマット・検証、バックエンドコンテナイメージのビルドを行う。CIではAWSへの認証やデプロイを行わず、CDと責務を分離する。
 各Issueの作業が完了したら`develop`へPull Requestを作成する。
 Phaseに属するすべてのIssueが`develop`へマージされ、統合テストが成功した段階で、`main`へのPull Requestを作成する。
 AWS環境は1つのみとし、`main`へのマージをAWSデプロイの基準とする。
