@@ -16,10 +16,52 @@ env:
   ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
   ECS_SERVICE: ${{ vars.ECS_SERVICE }}
   ECS_TASK_DEFINITION: ${{ vars.ECS_TASK_DEFINITION }}
+  AMPLIFY_APP_ID: ${{ vars.AMPLIFY_APP_ID }}
+  AMPLIFY_BRANCH_NAME: main
   CONTAINER_NAME: backend
 
 jobs:
-  deploy:
+  changes:
+    runs-on: ubuntu-latest
+
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed components
+        id: filter
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          set -eu
+          if [ "${BEFORE_SHA}" = "0000000000000000000000000000000000000000" ]; then
+            changed_files="$(git ls-tree -r --name-only "${AFTER_SHA}")"
+          else
+            changed_files="$(git diff --name-only "${BEFORE_SHA}" "${AFTER_SHA}")"
+          fi
+
+          if printf '%s\n' "${changed_files}" | grep -Eq '^(backend/|api/|\.github/workflows/cd\.yml$)'; then
+            echo "backend=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "backend=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if printf '%s\n' "${changed_files}" | grep -Eq '^(frontend/|\.github/workflows/cd\.yml$)'; then
+            echo "frontend=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "frontend=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+  deploy-backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -80,3 +122,76 @@ jobs:
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
+
+  deploy-frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate deployment variables
+        run: |
+          set -eu
+          for variable in AWS_REGION AWS_ROLE_ARN AMPLIFY_APP_ID AMPLIFY_BRANCH_NAME; do
+            if [ -z "${!variable}" ]; then
+              echo "GitHub repository variable ${variable} is required" >&2
+              exit 1
+            fi
+          done
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+
+      - name: Create Amplify deployment
+        id: create-deployment
+        working-directory: frontend
+        run: |
+          set -eu
+          zip -r ../frontend.zip .
+          response="$(aws amplify create-deployment \
+            --app-id "${AMPLIFY_APP_ID}" \
+            --branch-name "${AMPLIFY_BRANCH_NAME}" \
+            --output json)"
+          printf '%s' "${response}" | jq -r '.zipUploadUrl' > ../amplify-upload-url
+          printf '%s' "${response}" | jq -r '.jobId' > ../amplify-job-id
+
+      - name: Upload frontend bundle
+        run: |
+          set -eu
+          curl --fail --silent --show-error \
+            --upload-file frontend.zip \
+            "$(cat amplify-upload-url)"
+
+      - name: Start Amplify deployment
+        run: |
+          set -eu
+          aws amplify start-deployment \
+            --app-id "${AMPLIFY_APP_ID}" \
+            --branch-name "${AMPLIFY_BRANCH_NAME}" \
+            --job-id "$(cat amplify-job-id)"
+
+      - name: Wait for Amplify deployment
+        run: |
+          set -eu
+          for attempt in $(seq 1 30); do
+            status="$(aws amplify get-job \
+              --app-id "${AMPLIFY_APP_ID}" \
+              --branch-name "${AMPLIFY_BRANCH_NAME}" \
+              --job-id "$(cat amplify-job-id)" \
+              --query 'job.summary.status' \
+              --output text)"
+            echo "Amplify deployment status: ${status}"
+            case "${status}" in
+              SUCCEED) exit 0 ;;
+              FAILED|CANCELLED|CANCELLING) exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "Amplify deployment did not finish within the timeout" >&2
+          exit 1

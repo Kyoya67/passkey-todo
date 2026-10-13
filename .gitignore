@@ -26,3 +26,6 @@ infra/stg/moved.tf
 # Local environment files
 **/.envrc
 !infra/.envrc
+
+# Frontend dependencies
+frontend/node_modules/

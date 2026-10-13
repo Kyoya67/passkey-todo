@@ -19,7 +19,7 @@ resource "aws_iam_role_policy_attachment" "execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-data "aws_iam_policy_document" "task" {
+data "aws_iam_policy_document" "execution" {
   statement {
     actions   = ["secretsmanager:GetSecretValue"]
     resources = [var.secret_arn]
@@ -30,16 +30,16 @@ data "aws_iam_policy_document" "task" {
   }
 }
 
+resource "aws_iam_role_policy" "execution" {
+  name   = "${var.name}-ecs-execution-policy"
+  role   = aws_iam_role.execution.id
+  policy = data.aws_iam_policy_document.execution.json
+}
+
 resource "aws_iam_role" "task" {
   name               = "${var.name}-ecs-task"
   assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
   tags               = var.tags
-}
-
-resource "aws_iam_role_policy" "task" {
-  name   = "${var.name}-ecs-task-policy"
-  role   = aws_iam_role.task.id
-  policy = data.aws_iam_policy_document.task.json
 }
 
 resource "aws_iam_openid_connect_provider" "github" {

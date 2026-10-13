@@ -86,12 +86,14 @@ kyoya67-todo/
 ├── infra/
 │   └── modules/
 │       ├── alb/
+│       ├── amplify/
 │       ├── ecr/
 │       ├── ecs/
 │       ├── iam/
 │       ├── internet_gateway/
 │       ├── logs/
 │       ├── rds/
+│       ├── route53/
 │       ├── route_table/
 │       ├── secrets/
 │       ├── security_groups/
@@ -105,7 +107,9 @@ kyoya67-todo/
 └── README.md
 ```
 
-`backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`はフロントエンドを管理し、バックエンドとは独立したアプリケーションとして扱う。`api/`ではバックエンドとフロントエンドで共有するAPI仕様を管理する。`infra/`ではAWS ECS Fargate、ECR、RDS、IAMなどのインフラ構成をTerraformで管理する。`ai-usage/`ではPull RequestごとのAI利用記録を管理する。
+`backend/`ではGo、Echo、PostgreSQLアクセス、REST APIを管理する。`frontend/`は静的フロントエンドを管理し、AWS Amplify Hostingで配信する。バックエンドとは独立したアプリケーションとして扱う。`api/`ではバックエンドとフロントエンドで共有するAPI仕様を管理する。`infra/`ではAWS ECS Fargate、ECR、RDS、IAM、Route 53、Amplifyなどのインフラ構成をTerraformで管理する。`ai-usage/`ではPull RequestごとのAI利用記録を管理する。
+
+Route 53では委任済みの`ca-techlounge-todo.kyo8.dev`のホストゾーンを管理し、`api.ca-techlounge-todo.kyo8.dev`をALBへ向けるAliasレコードを作成する。親ドメイン`kyo8.dev`を管理するドメインレジストラ側で、Route 53が出力するネームサーバーを委任先として設定する。ACM証明書とALBのHTTPSリスナーは別の構成として扱う。
 
 データベースマイグレーションは`golang-migrate`で管理する。`backend/db/migration/001_create_todos.up.sql`のようにup/downを同じバージョン番号で管理し、DB側に適用済みバージョンとdirty状態を記録する。ルートのMakefileから未適用分の適用、直前の1件のロールバック、dirty状態の手動修正を実行する。sqlcのスキーマ入力はup SQLだけに限定し、down SQLを生成コードのスキーマ解析へ混入させない。
 
@@ -429,4 +433,18 @@ AWS環境は1つのみとし、`main`へのマージをAWSデプロイの基準�
 
 ### 6.2 CI
 
+CIはPull Requestで実行する。最初に変更パスを判定し、関係する検証ジョブだけを実行する。ワークフロー設定自体を変更した場合は、各検証ジョブを実行する。
+
+- バックエンド：`go test ./...`、`go vet ./...`
+- sqlc：`sqlc vet`、`sqlc generate`を実行し、生成コードに未コミットの差分がないことを確認
+- Terraform：`terraform fmt -check -recursive`、`terraform init -backend=false`、`terraform validate`
+- コンテナ：バックエンドのDockerイメージをビルド
+- フロントエンド：Node.jsの依存関係をインストールし、Prettierのフォーマットチェック
+
+CIではAWSへのデプロイは行わず、コードとTerraform構成の静的・ビルド検証に限定する。
+
 ### 6.3 CD
+
+CDは`main`へのpushを起点に実行する。変更されたパスを判定し、`backend/`またはAPI仕様・CD設定に変更がある場合だけバックエンドをECR・ECSへデプロイする。`frontend/`またはCD設定に変更がある場合だけ、Gitリポジトリに接続していないAmplifyへ静的ファイルを手動デプロイする。バックエンドとフロントエンドは独立したジョブとして実行する。
+
+Amplifyの手動デプロイでは、GitHub ActionsがフロントエンドをZIP化し、Amplifyのデプロイ用アップロードURLへ転送した後、デプロイを開始して完了状態を確認する。AmplifyアプリIDはGitHubリポジトリ変数で管理し、AWS認証はOIDCを使用する。

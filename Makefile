@@ -1,3 +1,4 @@
+AWS_PROFILE ?= ca-techlounge-todo-terraform
 AWS_REGION ?= ap-northeast-1
 ECS_CLUSTER ?= kyoya67-todo
 ECS_SERVICE ?= kyoya67-todo
@@ -15,19 +16,19 @@ db-migrate-force:
 	docker compose --profile migration run --rm migration force $(VERSION)
 
 ecs-start:
-	AWS_REGION=$(AWS_REGION) aws ecs update-service \
+	AWS_PROFILE=$(AWS_PROFILE) AWS_REGION=$(AWS_REGION) aws ecs update-service \
 		--cluster $(ECS_CLUSTER) \
 		--service $(ECS_SERVICE) \
 		--desired-count 1
 
 ecs-stop:
-	AWS_REGION=$(AWS_REGION) aws ecs update-service \
+	AWS_PROFILE=$(AWS_PROFILE) AWS_REGION=$(AWS_REGION) aws ecs update-service \
 		--cluster $(ECS_CLUSTER) \
 		--service $(ECS_SERVICE) \
 		--desired-count 0
 
 ecs-status:
-	AWS_REGION=$(AWS_REGION) aws ecs describe-services \
+	AWS_PROFILE=$(AWS_PROFILE) AWS_REGION=$(AWS_REGION) aws ecs describe-services \
 		--cluster $(ECS_CLUSTER) \
 		--services $(ECS_SERVICE) \
 		--query 'services[0].{desired:desiredCount,running:runningCount,pending:pendingCount,status:status}' \
