@@ -1,12 +1,12 @@
 const apiInput = document.querySelector('#api-url');
 const list = document.querySelector('#todo-list');
 const message = document.querySelector('#message');
-const savedURL = localStorage.getItem('todo-api-url');
-if (savedURL) apiInput.value = savedURL;
+const defaultAPIURL = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+  ? 'http://localhost:8080'
+  : 'https://api.ca-techlounge-todo.kyo8.dev';
+apiInput.textContent = defaultAPIURL;
 const apiURL = () => {
-  const value = apiInput.value.trim().replace(/\/$/, '');
-  localStorage.setItem('todo-api-url', value);
-  return value;
+  return defaultAPIURL;
 };
 const request = async (path, options = {}) => {
   const response = await fetch(`${apiURL()}${path}`, {

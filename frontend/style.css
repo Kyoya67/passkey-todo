@@ -50,6 +50,7 @@ form,
 .connection {
   margin-top: 28px;
 }
+.api-url-label,
 label {
   color: #687670;
   font-size: 13px;
@@ -72,6 +73,7 @@ input:focus {
 #api-url {
   width: min(390px, 100%);
   font-size: 13px;
+  color: #687670;
 }
 .button {
   border: 0;

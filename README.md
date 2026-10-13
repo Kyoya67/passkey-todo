@@ -56,7 +56,7 @@ cd ..
 npx serve frontend -l 3000
 `````
 
-ブラウザで`http://localhost:3000`を開く。画面上のAPI URLは、ローカルバックエンドを確認するため`http://localhost:8080`を初期値にしている。AWS上のAPIを確認する場合のみ、画面上で`https://api.ca-techlounge-todo.kyo8.dev`へ変更する。
+ブラウザで`http://localhost:3000`を開く。ローカルホストでは`http://localhost:8080`、Amplifyのドメインでは`https://api.ca-techlounge-todo.kyo8.dev`をAPI URLとして自動設定する。API URLは画面から変更できず、「接続確認」ボタンでヘルスチェックだけを実行できる。
 
 ### マイグレーション
 
