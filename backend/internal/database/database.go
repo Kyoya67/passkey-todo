@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -11,14 +12,7 @@ import (
 )
 
 func NewPool(ctx context.Context, cfg *config.Config) (*pgxpool.Pool, error) {
-	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		cfg.DBUser,
-		cfg.DBPassword,
-		cfg.DBHost,
-		cfg.DBPort,
-		cfg.DBName,
-	)
+	dsn := buildDSN(cfg)
 
 	poolConfig, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
@@ -40,4 +34,20 @@ func NewPool(ctx context.Context, cfg *config.Config) (*pgxpool.Pool, error) {
 	}
 
 	return pool, nil
+}
+
+func buildDSN(cfg *config.Config) string {
+	dsn := fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		cfg.DBUser,
+		cfg.DBPassword,
+		cfg.DBHost,
+		cfg.DBPort,
+		cfg.DBName,
+		url.QueryEscape(cfg.DBSSLMode),
+	)
+	if cfg.DBSSLRootCert != "" {
+		dsn += "&sslrootcert=" + url.QueryEscape(cfg.DBSSLRootCert)
+	}
+	return dsn
 }
