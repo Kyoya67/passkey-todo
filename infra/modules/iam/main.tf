@@ -45,9 +45,6 @@ resource "aws_iam_role_policy" "task" {
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
-  thumbprint_list = [
-    "2d74d6dfd96eea55ad7baafa0d3c6552b2dadc37",
-  ]
 }
 
 data "aws_iam_policy_document" "github_actions_assume" {
