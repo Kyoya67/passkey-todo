@@ -109,6 +109,14 @@ module "ecs" {
   tags                 = local.common_tags
 }
 
+module "acm" {
+  source = "./modules/acm"
+
+  domain_name = "api.ca-techlounge-todo.kyo8.dev"
+  zone_name   = "ca-techlounge-todo.kyo8.dev"
+  tags        = local.common_tags
+}
+
 module "alb" {
   source = "./modules/alb"
 
@@ -117,6 +125,7 @@ module "alb" {
   subnet_ids        = module.subnet.public_subnet_ids
   security_group_id = module.security_groups.alb_id
   target_port       = var.backend_port
+  certificate_arn   = module.acm.certificate_arn
   tags              = local.common_tags
 }
 
