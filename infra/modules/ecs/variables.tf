@@ -13,5 +13,6 @@ variable "task_role_arn" { type = string }
 variable "secret_arn" { type = string }
 variable "log_group_name" { type = string }
 variable "database_host" { type = string }
+variable "cors_allowed_origins" { type = string }
 variable "region" { type = string }
 variable "tags" { type = map(string) }

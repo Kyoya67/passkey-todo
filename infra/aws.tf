@@ -93,19 +93,20 @@ module "iam" {
 module "ecs" {
   source = "./modules/ecs"
 
-  name               = local.project
-  image              = var.backend_image != "" ? var.backend_image : module.ecr.repository_url
-  port               = var.backend_port
-  cluster_name       = local.project
-  subnet_ids         = module.subnet.public_subnet_ids
-  security_group_id  = module.security_groups.ecs_id
-  execution_role_arn = module.iam.execution_role_arn
-  task_role_arn      = module.iam.task_role_arn
-  secret_arn         = module.secrets.arn
-  log_group_name     = module.logs.name
-  database_host      = module.rds.address
-  region             = local.region
-  tags               = local.common_tags
+  name                 = local.project
+  image                = var.backend_image != "" ? var.backend_image : module.ecr.repository_url
+  port                 = var.backend_port
+  cluster_name         = local.project
+  subnet_ids           = module.subnet.public_subnet_ids
+  security_group_id    = module.security_groups.ecs_id
+  execution_role_arn   = module.iam.execution_role_arn
+  task_role_arn        = module.iam.task_role_arn
+  secret_arn           = module.secrets.arn
+  log_group_name       = module.logs.name
+  database_host        = module.rds.address
+  cors_allowed_origins = "https://ca-techlounge-todo.kyo8.dev"
+  region               = local.region
+  tags                 = local.common_tags
 }
 
 module "alb" {
