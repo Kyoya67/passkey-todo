@@ -7,9 +7,9 @@
 | [ASSIGNMENT.md](ASSIGNMENT.md) | 選考課題の要件、提出条件、注意事項 |
 | [DESIGN.md](DESIGN.md) | 開発方針、構成、技術選定、設計判断 |
 | [AGENTS.md](AGENTS.md) | 開発時の実装・ドキュメント・AI利用記録のルール |
-| [backend/TESTING.md](backend/TESTING.md) | 単体テスト、統合テスト、カバレッジ、検証コマンド |
-| [api/openapi/openapi.yaml](api/openapi/openapi.yaml) | REST API仕様の正となるOpenAPI定義 |
-| [ai-usage/](ai-usage/) | PRごとの生成AI利用記録 |
+| [backend/TESTING.md](backend/TESTING.md) | 単体テスト、統合テスト、カバレッジ、検証方法 |
+| [api/openapi/openapi.yaml](api/openapi/openapi.yaml) | REST API仕様の正となるOpenAPI定義、コード生成元 |
+| [ai-usage/](ai-usage/) | PRごとの生成AI利用記録、利用箇所と検証方法 |
 
 実装を始める前に`ASSIGNMENT.md`と`DESIGN.md`を確認する。ローカル起動はこのREADME、テストの詳細は[backend/TESTING.md](backend/TESTING.md)を参照する。
 
@@ -142,46 +142,6 @@ curl -i -X PUT http://localhost:8080/todos/1 \
   -d '{"title":"買い物を完了する"}'
 curl -i -X DELETE http://localhost:8080/todos/1
 `````
-
-### テストとカバレッジ
-
-詳細は[backend/TESTING.md](backend/TESTING.md)を参照する。`backend`ディレクトリで実行する。
-
-`````sh
-cd backend
-go test ./...
-go vet ./...
-go test ./... -coverprofile=coverage.out
-go tool cover -func=coverage.out
-`````
-
-PostgreSQLコンテナとマイグレーションを準備した状態で、統合テストを実行する。
-
-`````sh
-INTEGRATION_DATABASE_URL='postgres://todo:secret@localhost:5432/todo?sslmode=disable' \
-  go test ./internal/repository -run Integration -coverprofile=integration-only-coverage.out -count=1
-go tool cover -func=integration-only-coverage.out
-`````
-
-単体テストのカバレッジはHandler 93.2%、Service 90.0%、Repository 100.0%、全パッケージ29.3%。統合テスト単独のRepositoryカバレッジは100.0%である。カバレッジプロファイルは生成物のためGitへコミットしない。
-
-### OpenAPIとコード生成
-
-OpenAPI定義は[api/openapi/openapi.yaml](api/openapi/openapi.yaml)で管理する。Swagger UIはCompose起動後に`http://localhost:8081`で確認できる。
-
-Goコードを再生成する場合は`backend`ディレクトリで実行する。
-
-`````sh
-go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0 \
-  -config internal/openapi/oapi-codegen.yaml \
-  ../api/openapi/openapi.yaml
-`````
-
-生成コードは直接編集せず、OpenAPI定義を修正して再生成する。
-
-### 生成AIの利用
-
-開発中にOpenAI Codexを利用している。利用箇所、採用理由、開発者による修正・判断、検証方法、代表的なプロンプトは[ai-usage/](ai-usage/)にPRごとに記録している。
 
 ### ローカル環境の停止
 
