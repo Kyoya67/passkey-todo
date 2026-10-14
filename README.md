@@ -1,6 +1,4 @@
-# kyoya67-todo
-
-## ドキュメント全体像
+# ドキュメント全体像
 
 | ドキュメント | 内容 |
 |---|---|
@@ -11,19 +9,13 @@
 | [api/openapi/openapi.yaml](api/openapi/openapi.yaml) | REST API仕様の正となるOpenAPI定義、コード生成元 |
 | [ai-usage/](ai-usage/) | PRごとの生成AI利用記録、利用箇所と検証方法 |
 
-実装を始める前に`ASSIGNMENT.md`と`DESIGN.md`を確認する。ローカル起動はこのREADME、テストの詳細は[backend/TESTING.md](backend/TESTING.md)を参照する。
-
-## 考察
+# 考察
 
 Go/Echo、PostgreSQL、sqlc、OpenAPI、AWS ECS Fargateを採用し、API仕様と実装のずれを減らしながら、ローカルとクラウドで同じAPIを確認できる構成にした。レイヤー分離、SQLの型安全なコード生成、TerraformによるAWS管理、GitHub Actionsによるデプロイを選んだ理由や設計上の判断は、[DESIGN.md](DESIGN.md)にまとめている。
 
-## 作成したアプリケーションの起動・動作確認手順
+# 作成したアプリケーションの起動・動作確認手順
 
-### ローカル環境の起動
-
-バックエンド、PostgreSQL、Swagger UIをDocker Composeで起動する。フロントエンドはNode.jsの静的HTTPサーバーで配信する。
-
-### 前提
+## 前提
 
 - Go
 - Docker Desktop
@@ -31,15 +23,19 @@ Go/Echo、PostgreSQL、sqlc、OpenAPI、AWS ECS Fargateを採用し、API仕様�
 - Node.js（`npx`を含む）
 - sqlc
 
-### 環境変数
+## 環境変数
 
 プロジェクト直下の`.env.example`をコピーして`.env`を作成する。
+
+## ローカル環境の起動
+
+バックエンド、PostgreSQL、Swagger UIをDocker Composeで起動する。フロントエンドはNode.jsの静的HTTPサーバーで配信する。
 
 `````sh
 cp .env.example .env
 `````
 
-### コンテナの起動
+### バックエンド・DB・Swagger UIの起動
 
 プロジェクトルートで実行する。
 
@@ -49,7 +45,7 @@ docker compose up -d --build
 docker compose ps
 `````
 
-`backend`、`db`、`swagger-ui`が起動し、`db`サービスが`healthy`になっていることを確認する。Swagger UIは`http://localhost:8081`で利用できる。
+`backend`、`db`、`swagger-ui`が起動し、`db`サービスが`healthy`になっていることを確認する。Swagger UIは[http://localhost:8081](http://localhost:8081)で利用できる。
 
 ### フロントエンドの起動
 
@@ -62,7 +58,7 @@ cd ..
 npx serve frontend -l 3000
 `````
 
-ブラウザで`http://localhost:3000`を開く。ローカルホストでは`http://localhost:8080`、Amplifyのドメインでは`https://api.ca-techlounge-todo.kyo8.dev`をAPI URLとして自動設定する。API URLは画面から変更できず、「接続確認」ボタンでヘルスチェックだけを実行できる。
+ブラウザで[http://localhost:3000](http://localhost:3000)を開く。ローカルで立ち上げたフロントエンドでは`http://localhost:8080`をAPI URLとして自動設定する。API URLは画面から変更できず、「接続確認」ボタンでヘルスチェックだけを実行できる。
 
 ### マイグレーション
 
@@ -86,32 +82,9 @@ make db-migrate-force VERSION=1
 
 マイグレーションファイルは`backend/db/migration/001_create_todos.up.sql`と`001_create_todos.down.sql`のように、同じバージョン番号のup/downを追加する。
 
-AWSのRDSへ適用する場合は、Terraformが作成するマイグレーション専用ECSタスクを実行する。`main`へのマイグレーションファイル変更では、CDがコミットハッシュをタグにしたイメージをECRへpushし、そのタグを指定したタスク定義を登録してからタスクを実行する。初回のイメージ登録や手動確認では、`make db-migrate-ecs`を利用できる。
+### Swagger UIから確認する
 
-テーブルを確認する。
-
-`````sh
-docker compose exec db \
-  psql -U todo -d todo -c "\\dt"
-`````
-
-### sqlcのコード生成・検証
-
-`sqlc.yaml`がある`backend`ディレクトリで実行する。
-
-`````sh
-cd backend
-sqlc vet
-sqlc generate
-go fmt ./...
-go test ./...
-`````
-
-### ローカル環境の動作確認
-
-#### Swagger UIから確認する
-
-ブラウザで`http://localhost:8081`を開く。各エンドポイントを選択して「Try it out」を押し、必要なパラメータやリクエストボディを入力して「Execute」を押す。レスポンスのステータスコードとJSONを確認する。
+ブラウザで[http://localhost:8081](http://localhost:8081)を開く。各エンドポイントを選択して「Try it out」を押し、必要なパラメータやリクエストボディを入力して「Execute」を押す。レスポンスのステータスコードとJSONを確認する。
 
 Swagger UIでは、次の4つの必須APIを順番に確認できる。
 
@@ -121,27 +94,6 @@ Swagger UIでは、次の4つの必須APIを順番に確認できる。
 4. `DELETE /todos/{id}`で作成したTODOを削除する
 
 最初に`GET /health`を実行し、HTTP 200と`{"status":"ok"}`が返ることを確認する。
-
-#### curlから確認する
-
-Swagger UIと同じ確認をコマンドラインで再現する場合は、次のコマンドを実行する。
-
-`````sh
-curl -i http://localhost:8080/health
-`````
-
-TODO APIの確認例：
-
-`````sh
-curl -i -X POST http://localhost:8080/todos \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"買い物をする"}'
-curl -i 'http://localhost:8080/todos?title=買い物'
-curl -i -X PUT http://localhost:8080/todos/1 \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"買い物を完了する"}'
-curl -i -X DELETE http://localhost:8080/todos/1
-`````
 
 ### ローカル環境の停止
 
@@ -153,47 +105,22 @@ docker compose down
 
 `docker compose down -v`を実行するとPostgreSQLのボリュームも削除されるため、保存データを削除する場合以外は使用しない。
 
-### クラウド環境の動作確認
+## クラウド環境の動作確認
 
-AWS環境のAPIを確認するときは、プロジェクトルートでECS Serviceを起動し、状態を確認する。
+### フロントエンド確認
+デプロイ済みのフロントエンドをブラウザで[https://ca-techlounge-todo.kyo8.dev](https://ca-techlounge-todo.kyo8.dev)を開く。クラウド上のフロントエンドでは`https://api.ca-techlounge-todo.kyo8.dev`をAPI URLとして自動設定する。API URLは画面から変更できず、「接続確認」ボタンでヘルスチェックだけを実行できる。
 
-`````sh
-make ecs-start
-make ecs-status
-`````
+画面の「接続確認」でAPIへ接続できることを確認する。その後、TODOの作成、一覧取得、タイトル検索、更新、削除を画面から実行する。
 
-`running`が`1`になったら、次のフロントエンドをブラウザで開く。
 
-- [クラウドフロントエンド](https://ca-techlounge-todo.kyo8.dev)
+### Swagger UI確認
+クラウド上のAPIをSwagger UIから確認する場合は、ローカル環境を起動して[http://localhost:8081](http://localhost:8081)を開く。画面上部のサーバー選択欄で`AWS上のAPI`を選択すると、ローカルSwagger UIからクラウドAPIを実行できる。
 
-画面の「接続確認」でAPIへ接続できることを確認する。画面からTODOを作成・一覧取得・タイトル検索・更新・削除し、必須APIの動作を確認する。
+必須APIは次の順番で確認する。
 
-APIを直接確認する場合は、APIドメインを指定してOpenAPI定義にあるパスを実行する。API仕様の正は[api/openapi/openapi.yaml](api/openapi/openapi.yaml)であり、`paths`に具体的なHTTPメソッドとURL、`parameters`にクエリやパスパラメータ、`requestBody`にリクエスト形式、`responses`にレスポンスを定義している。
-
-まずヘルスチェックを実行する。
-
-`````sh
-curl -i https://api.ca-techlounge-todo.kyo8.dev/health
-`````
-
-TODO APIは、OpenAPIの`/todos`と`/todos/{id}`に対応する。タイトルの部分一致検索は`title`クエリパラメータで実行する。
-
-`````sh
-curl -i -X POST https://api.ca-techlounge-todo.kyo8.dev/todos \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"買い物をする"}'
-curl -i 'https://api.ca-techlounge-todo.kyo8.dev/todos?title=買い物'
-curl -i -X PUT https://api.ca-techlounge-todo.kyo8.dev/todos/1 \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"買い物を完了する"}'
-curl -i -X DELETE https://api.ca-techlounge-todo.kyo8.dev/todos/1
-`````
-
-確認後はECS Serviceを停止する。
-
-`````sh
-make ecs-stop
-make ecs-status
-`````
-
-停止後もAWSリソース自体は削除されないため、利用しない時間帯は停止し、AWSコンソールまたはAWS CLIで状態と料金を確認する。
+1. `GET /health`でHTTP 200とヘルスチェック結果を確認する
+2. `POST /todos`でTODOを作成する
+3. `GET /todos`で一覧を取得する
+4. `GET /todos?title=...`でタイトルの部分一致検索を確認する
+5. `PUT /todos/{id}`で作成したTODOを更新する
+6. `DELETE /todos/{id}`で作成したTODOを削除する
