@@ -2,6 +2,17 @@
 
 Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsqlc呼び出しを責務ごとにテストする。sqlcが生成したコード自体の単体テストは作成せず、生成コードを利用するRepositoryの引数、戻り値、エラー伝播をFakeで検証する。
 
+## internal/auth
+
+`internal/auth/webauthn.go`では、次の観点をテストしている。ローカルと本番のRP ID・Originで初期化できること、空値・不正なRP ID・異なるホスト・本番でのHTTP・パス付きOriginを拒否することを確認する。登録・ログイン処理はまだ実装していない。
+
+| ファイル | 関数 | カバレッジ |
+|---|---|---:|
+| webauthn.go | NewWebAuthn | 100.0% |
+| **パッケージ合計** |  | **100.0%** |
+
+計測コマンド：`go test ./internal/auth -coverprofile=/tmp/kyoya-auth-coverage.out`、`go tool cover -func=/tmp/kyoya-auth-coverage.out`。
+
 ## internal/handler
 
 `internal/handler/todo_test.go`では、Fake Serviceを差し替え、HTTPリクエストのバインド、レスポンスJSON、ステータスコード、サービスエラーのHTTP変換、TODOのレスポンス変換をテストしている。

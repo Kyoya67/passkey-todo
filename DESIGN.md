@@ -69,6 +69,7 @@ kyoya67-todo/
 │   │   └── api/
 │   ├── internal/
 │   │   ├── config/
+│   │   ├── auth/
 │   │   ├── database/
 │   │   │   └── sqlc/
 │   │   ├── handler/
@@ -257,6 +258,10 @@ AIの具体的な利用履歴、代表的なプロンプト、採用・修正・
 - TODOの優先順位設定
 - 大量データ登録時の負荷対策
 - gRPCによるAPIの提供
+
+Issue #11ではCognitoを使わず、既存のGoバックエンドでWebAuthnによるパスキー認証を実装する。暗号処理は実績あるライブラリへ委ねる。メール、パスワード、OTPを要求せず、パスキーだけで新規登録とログインを行う。ローカルとAWSでは同じコード・マイグレーションを使用するが、ユーザー・公開鍵・TODOは各環境のPostgreSQLに別々に保存する。RP IDと許可Originを環境ごとに設定し、全パスキーを失った場合のアカウント復旧は提供しない。CognitoによるDev/Prod User Pool共有案は、開発者ごとに独立したローカル認証環境を再現できないため取り下げた。
+
+認証コードは`internal/auth/`へまとめ、WebAuthn初期化、登録・ログイン、セッション処理を小さな単位で追加する。既存のTODO実装は`internal/handler`、`internal/service`、`internal/repository`に分離され、OpenAPI生成コードと接続されている。提示された`internal/todo/`と`cmd/server/`への移動は認証導入と同時に行わず、互換性を確認してから段階的に検討する。最初の単位としてGo 1.25と互換性のある`go-webauthn/webauthn` v0.17.4を導入し、ローカルの`localhost`と本番HTTPSのRP ID・Origin設定を検証する初期化処理を追加した。現時点ではルーティングやDBにはまだ接続していない。
 
 ### 3.3 非機能要件・開発上の方針
 
