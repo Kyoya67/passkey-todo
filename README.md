@@ -80,7 +80,7 @@ make db-migrate-force VERSION=1
 
 マイグレーションファイルは`backend/db/migration/001_create_todos.up.sql`と`001_create_todos.down.sql`のように、同じバージョン番号のup/downを追加する。
 
-AWSのRDSへ適用する場合は、Terraformが作成するマイグレーション専用ECSタスクを実行する。`make db-migrate-ecs`はタスクを1回起動し、完了後に停止する。実行前にTerraformでECR・タスク定義を適用し、CDでマイグレーションイメージがECRへ登録済みであることを確認する。
+AWSのRDSへ適用する場合は、Terraformが作成するマイグレーション専用ECSタスクを実行する。`main`へのマイグレーションファイル変更では、CDがコミットハッシュをタグにしたイメージをECRへpushし、そのタグを指定したタスク定義を登録してからタスクを実行する。初回のイメージ登録や手動確認では、`make db-migrate-ecs`を利用できる。
 
 テーブルを確認する。
 
