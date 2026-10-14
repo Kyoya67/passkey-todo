@@ -118,6 +118,15 @@ form input {
 .list-header {
   justify-content: space-between;
 }
+.search-form {
+  margin-top: 24px;
+}
+.search-form label {
+  white-space: nowrap;
+}
+.search-form input {
+  flex: 1;
+}
 #message {
   min-height: 22px;
   color: #16816d;

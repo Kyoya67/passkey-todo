@@ -6,6 +6,9 @@ info:
 
 servers:
   - url: http://localhost:8080
+    description: ローカルAPI
+  - url: https://api.ca-techlounge-todo.kyo8.dev
+    description: AWS上のAPI
 
 tags:
   - name: todos

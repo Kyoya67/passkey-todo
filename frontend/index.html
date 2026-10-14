@@ -34,10 +34,14 @@
         <div class="list-header">
           <div>
             <p class="eyebrow">YOUR LIST</p>
-            <h2>TODO一覧 <span id="todo-count">0</span></h2>
+            <h2>TODO一覧</h2>
           </div>
-          <button id="refresh-button" class="button secondary">更新する</button>
         </div>
+        <form id="search-form" class="search-form">
+          <label for="search-title">タイトルで検索</label>
+          <input id="search-title" type="search" placeholder="例：買い物" />
+          <button class="button secondary">検索</button>
+        </form>
         <p id="message" role="status"></p>
         <div id="todo-list"></div>
       </section>

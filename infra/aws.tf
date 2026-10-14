@@ -113,7 +113,7 @@ module "ecs" {
   secret_arn           = module.secrets.arn
   log_group_name       = module.logs.name
   database_host        = module.rds.address
-  cors_allowed_origins = "https://ca-techlounge-todo.kyo8.dev"
+  cors_allowed_origins = "https://ca-techlounge-todo.kyo8.dev,http://localhost:8081"
   region               = local.region
   tags                 = local.common_tags
 }

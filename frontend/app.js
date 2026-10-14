@@ -1,6 +1,7 @@
 const apiInput = document.querySelector('#api-url');
 const list = document.querySelector('#todo-list');
 const message = document.querySelector('#message');
+const searchTitle = document.querySelector('#search-title');
 const defaultAPIURL = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
   ? 'http://localhost:8080'
   : 'https://api.ca-techlounge-todo.kyo8.dev';
@@ -28,9 +29,10 @@ const escapeHTML = (value) =>
   );
 async function load() {
   try {
-    const data = await request('/todos');
+    const title = searchTitle.value.trim();
+    const query = title ? `?${new URLSearchParams({ title })}` : '';
+    const data = await request(`/todos${query}`);
     const todos = data.todos || [];
-    document.querySelector('#todo-count').textContent = todos.length;
     list.innerHTML = todos.length
       ? todos
           .map(
@@ -43,6 +45,10 @@ async function load() {
     show(`一覧取得に失敗しました（${error.message}）`, true);
   }
 }
+document.querySelector('#search-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  await load();
+});
 document.querySelector('#todo-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const input = document.querySelector('#title');
@@ -91,7 +97,6 @@ list.addEventListener('click', async (event) => {
     show(`操作に失敗しました（${error.message}）`, true);
   }
 });
-document.querySelector('#refresh-button').addEventListener('click', load);
 document.querySelector('#health-button').addEventListener('click', async () => {
   const status = document.querySelector('#health-status');
   status.textContent = '確認中…';
