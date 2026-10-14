@@ -445,6 +445,6 @@ CIではAWSへのデプロイは行わず、コードとTerraform構成の静的
 
 ### 6.3 CD
 
-CDは`main`へのpushを起点に実行する。変更されたパスを判定し、`backend/`、`api/`、`infra/`またはCD設定に変更がある場合だけバックエンドをECR・ECSへデプロイする。`backend/db/migration/`に変更がある場合は、マイグレーション用イメージをコミットハッシュでECRへ登録し、そのタグを指定したECSワンショットタスクを実行してからバックエンドをデプロイする。初回のイメージ登録や手動確認では、Terraformで作成したタスクを`make db-migrate-ecs`から実行できる。`frontend/`またはCD設定に変更がある場合だけ、Gitリポジトリに接続していないAmplifyへ静的ファイルを手動デプロイする。バックエンドとフロントエンドは独立したジョブとして実行する。
+CDは`main`へのpushを起点に実行する。変更されたパスを判定し、`backend/`、`api/`、`infra/`またはCD設定に変更がある場合だけバックエンドをECR・ECSへデプロイする。`backend/db/migration/`に変更がある場合は、マイグレーション用イメージをコミットハッシュでECRへ登録し、そのタグを指定したECSワンショットタスクを実行してからバックエンドをデプロイする。初回のイメージ登録や手動確認では、Terraformで作成したタスクを`make db-migrate-ecs`から実行できる。`frontend/`またはCD設定に変更がある場合は、GitHub ActionsのCDでフロントエンドをZIP化してAmplifyへデプロイする。バックエンドとフロントエンドは独立したジョブとして実行する。
 
-Amplifyの手動デプロイでは、GitHub ActionsがフロントエンドをZIP化し、Amplifyのデプロイ用アップロードURLへ転送した後、デプロイを開始して完了状態を確認する。AmplifyアプリIDはGitHubリポジトリ変数で管理し、AWS認証はOIDCを使用する。
+Amplifyへのデプロイでは、GitHub ActionsのCDがフロントエンドをZIP化し、Amplifyのデプロイ用アップロードURLへ転送した後、デプロイを開始して完了状態を確認する。AmplifyアプリIDはGitHubリポジトリ変数で管理し、AWS認証はOIDCを使用する。
