@@ -13,7 +13,13 @@
 
 実装を始める前に`ASSIGNMENT.md`と`DESIGN.md`を確認する。ローカル起動はこのREADME、テストの詳細は[backend/TESTING.md](backend/TESTING.md)を参照する。
 
-## ローカル開発環境
+## 考察
+
+Go/Echo、PostgreSQL、sqlc、OpenAPI、AWS ECS Fargateを採用し、API仕様と実装のずれを減らしながら、ローカルとクラウドで同じAPIを確認できる構成にした。レイヤー分離、SQLの型安全なコード生成、TerraformによるAWS管理、GitHub Actionsによるデプロイを選んだ理由や設計上の判断は、[DESIGN.md](DESIGN.md)にまとめている。
+
+## 作成したアプリケーションの起動・動作確認手順
+
+### ローカル環境の起動
 
 バックエンド、PostgreSQL、Swagger UIをDocker Composeで起動する。フロントエンドはNode.jsの静的HTTPサーバーで配信する。
 
@@ -101,7 +107,7 @@ go fmt ./...
 go test ./...
 `````
 
-### 動作確認
+### ローカル環境の動作確認
 
 #### Swagger UIから確認する
 
@@ -177,29 +183,7 @@ go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0 \
 
 開発中にOpenAI Codexを利用している。利用箇所、採用理由、開発者による修正・判断、検証方法、代表的なプロンプトは[ai-usage/](ai-usage/)にPRごとに記録している。
 
-## AWS ECS Serviceの起動・停止
-
-ECS Serviceはコストを抑えるため、通常はタスク数（desired count）を`0`にして停止する。APIを確認するときだけ、プロジェクトルートで次のMakeコマンドを実行してタスク数を`1`にする。ECSの起動・停止・状態確認処理はMakefileにまとめている。
-
-`````sh
-make ecs-start
-make ecs-status
-`````
-
-確認が終わったら、タスク数を`0`に戻す。
-
-`````sh
-make ecs-stop
-make ecs-status
-`````
-
-`ecs-start`はECSタスクを1つ起動し、`ecs-stop`は0にして停止する。停止しても、ECS Service、ECR、ALB、RDS、CloudWatch Logsなどのリソースは削除されないため、料金が発生する場合がある。利用しない時間帯はServiceを停止し、AWSコンソールまたはAWS CLIで料金とリソース状態を確認する。
-
-### GitHub ActionsのCD
-
-`main`へのマージ後、変更されたディレクトリに応じて必要なデプロイだけを実行する。バックエンドはECR・ECSへ、フロントエンドはAmplifyへデプロイする。フロントエンドのデプロイには、GitHubリポジトリ変数`AMPLIFY_APP_ID`を設定する。
-
-### 停止
+### ローカル環境の停止
 
 プロジェクトルートでComposeのサービスを停止する。
 
@@ -208,3 +192,48 @@ docker compose down
 `````
 
 `docker compose down -v`を実行するとPostgreSQLのボリュームも削除されるため、保存データを削除する場合以外は使用しない。
+
+### クラウド環境の動作確認
+
+AWS環境のAPIを確認するときは、プロジェクトルートでECS Serviceを起動し、状態を確認する。
+
+`````sh
+make ecs-start
+make ecs-status
+`````
+
+`running`が`1`になったら、次のフロントエンドをブラウザで開く。
+
+- [クラウドフロントエンド](https://ca-techlounge-todo.kyo8.dev)
+
+画面の「接続確認」でAPIへ接続できることを確認する。画面からTODOを作成・一覧取得・タイトル検索・更新・削除し、必須APIの動作を確認する。
+
+APIを直接確認する場合は、APIドメインを指定してOpenAPI定義にあるパスを実行する。API仕様の正は[api/openapi/openapi.yaml](api/openapi/openapi.yaml)であり、`paths`に具体的なHTTPメソッドとURL、`parameters`にクエリやパスパラメータ、`requestBody`にリクエスト形式、`responses`にレスポンスを定義している。
+
+まずヘルスチェックを実行する。
+
+`````sh
+curl -i https://api.ca-techlounge-todo.kyo8.dev/health
+`````
+
+TODO APIは、OpenAPIの`/todos`と`/todos/{id}`に対応する。タイトルの部分一致検索は`title`クエリパラメータで実行する。
+
+`````sh
+curl -i -X POST https://api.ca-techlounge-todo.kyo8.dev/todos \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"買い物をする"}'
+curl -i 'https://api.ca-techlounge-todo.kyo8.dev/todos?title=買い物'
+curl -i -X PUT https://api.ca-techlounge-todo.kyo8.dev/todos/1 \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"買い物を完了する"}'
+curl -i -X DELETE https://api.ca-techlounge-todo.kyo8.dev/todos/1
+`````
+
+確認後はECS Serviceを停止する。
+
+`````sh
+make ecs-stop
+make ecs-status
+`````
+
+停止後もAWSリソース自体は削除されないため、利用しない時間帯は停止し、AWSコンソールまたはAWS CLIで状態と料金を確認する。
