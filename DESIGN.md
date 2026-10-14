@@ -263,6 +263,8 @@ Issue #11ではCognitoを使わず、既存のGoバックエンドでWebAuthnに
 
 認証コードは`internal/auth/`へまとめ、WebAuthn初期化、登録・ログイン、セッション処理を小さな単位で追加する。既存のTODO実装は`internal/handler`、`internal/service`、`internal/repository`に分離され、OpenAPI生成コードと接続されている。提示された`internal/todo/`と`cmd/server/`への移動は認証導入と同時に行わず、互換性を確認してから段階的に検討する。最初の単位としてGo 1.25と互換性のある`go-webauthn/webauthn` v0.17.4を導入し、ローカルの`localhost`と本番HTTPSのRP ID・Origin設定を検証する初期化処理を追加した。現時点ではルーティングやDBにはまだ接続していない。
 
+登録フローの保存先として、`users`と`passkey_credentials`を追加する。ユーザーIDはランダムなUUIDとしてアプリ側で生成し、Credential IDはバイナリの主キーとして一意に保持する。ライブラリが返す公開鍵や署名カウンターを含むCredential情報はJSONBで保存し、ユーザーIDへの外部キーを持たせる。登録完了時のユーザー作成とCredential保存は同一トランザクションにする予定で、検証が成功するまで確定しない。今回のスキーマ追加は既存の`todos`には触れない。既存TODOを認証ユーザーへどう紐付けるか、チャレンジとセッションの保存方法は後続の設計・実装で決める。
+
 ### 3.3 非機能要件・開発上の方針
 
 - Dockerでアプリケーションを起動できる
