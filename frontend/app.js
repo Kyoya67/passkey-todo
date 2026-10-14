@@ -22,6 +22,73 @@ const show = (text, error = false) => {
   message.textContent = text;
   message.style.color = error ? '#c34e4e' : '#16816d';
 };
+const passkeyButton = document.querySelector('#register-passkey');
+const passkeyStatus = document.querySelector('#passkey-status');
+const fromBase64URL = (value) => {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+};
+const toBase64URL = (value) => {
+  const bytes = new Uint8Array(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+passkeyButton.addEventListener('click', async () => {
+  if (!window.PublicKeyCredential || !navigator.credentials?.create) {
+    passkeyStatus.textContent = 'このブラウザではパスキーを利用できません。';
+    return;
+  }
+  passkeyButton.disabled = true;
+  passkeyStatus.textContent = '登録を開始しています…';
+  try {
+    const { registrationId, options } = await request('/auth/registration/begin', {
+      method: 'POST',
+    });
+    const publicKey = options.publicKey;
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        ...publicKey,
+        challenge: fromBase64URL(publicKey.challenge),
+        user: { ...publicKey.user, id: fromBase64URL(publicKey.user.id) },
+        excludeCredentials: publicKey.excludeCredentials?.map((item) => ({
+          ...item,
+          id: fromBase64URL(item.id),
+        })),
+      },
+    });
+    if (!credential) throw new Error('パスキーを作成できませんでした');
+    await request('/auth/registration/finish', {
+      method: 'POST',
+      body: JSON.stringify({
+        registrationId,
+        credential: {
+          id: credential.id,
+          rawId: toBase64URL(credential.rawId),
+          type: credential.type,
+          response: {
+            clientDataJSON: toBase64URL(credential.response.clientDataJSON),
+            attestationObject: toBase64URL(credential.response.attestationObject),
+            transports: credential.response.getTransports?.(),
+          },
+          clientExtensionResults: credential.getClientExtensionResults(),
+          authenticatorAttachment: credential.authenticatorAttachment ?? undefined,
+        },
+      }),
+    });
+    passkeyStatus.textContent = '登録しました。ログイン機能はまだ利用できません。';
+    passkeyStatus.style.color = '#16816d';
+  } catch (error) {
+    passkeyStatus.textContent =
+      error.name === 'NotAllowedError'
+        ? '登録がキャンセルされたか、時間切れになりました。もう一度お試しください。'
+        : `登録に失敗しました（${error.message}）。もう一度最初からお試しください。`;
+    passkeyStatus.style.color = '#c34e4e';
+  } finally {
+    passkeyButton.disabled = false;
+  }
+});
 const escapeHTML = (value) =>
   String(value).replace(
     /[&<>'"]/g,

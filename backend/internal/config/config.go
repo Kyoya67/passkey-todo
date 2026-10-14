@@ -18,6 +18,10 @@ type Config struct {
 	DBSSLMode          string
 	DBSSLRootCert      string
 	CORSAllowedOrigins []string
+	WebAuthnRPID       string
+	WebAuthnOrigin     string
+	RedisAddress       string
+	RedisTLS           bool
 }
 
 func Load() (*Config, error) {
@@ -33,6 +37,10 @@ func Load() (*Config, error) {
 		DBSSLMode:          getenvDefault("DB_SSLMODE", "disable"),
 		DBSSLRootCert:      os.Getenv("DB_SSLROOTCERT"),
 		CORSAllowedOrigins: splitCSV(os.Getenv("CORS_ALLOWED_ORIGINS")),
+		WebAuthnRPID:       os.Getenv("WEBAUTHN_RP_ID"),
+		WebAuthnOrigin:     os.Getenv("WEBAUTHN_ORIGIN"),
+		RedisAddress:       os.Getenv("REDIS_ADDR"),
+		RedisTLS:           os.Getenv("REDIS_TLS") == "true",
 	}
 
 	if config.AppPort == "" ||
@@ -44,6 +52,12 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("database environment variables are not configured")
 	}
 
+	if (config.WebAuthnRPID == "") != (config.WebAuthnOrigin == "") {
+		return nil, fmt.Errorf("WEBAUTHN_RP_ID and WEBAUTHN_ORIGIN must be configured together")
+	}
+	if config.WebAuthnRPID != "" && config.RedisAddress == "" {
+		return nil, fmt.Errorf("REDIS_ADDR is required when WebAuthn is configured")
+	}
 	return config, nil
 }
 

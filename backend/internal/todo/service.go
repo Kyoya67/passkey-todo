@@ -1,4 +1,4 @@
-package service
+package todo
 
 import (
 	"context"
@@ -21,7 +21,7 @@ const (
 	maxTodoLimit     int32 = 1000
 )
 
-type TodoRepository interface {
+type todoRepository interface {
 	Create(context.Context, string) (sqlc.Todo, error)
 	List(context.Context, string, int32, int32) ([]sqlc.Todo, error)
 	Update(context.Context, int64, string) (sqlc.Todo, error)
@@ -29,10 +29,10 @@ type TodoRepository interface {
 }
 
 type TodoService struct {
-	repository TodoRepository
+	repository todoRepository
 }
 
-func NewTodoService(repository TodoRepository) *TodoService {
+func NewTodoService(repository todoRepository) *TodoService {
 	return &TodoService{repository: repository}
 }
 

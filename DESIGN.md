@@ -72,12 +72,10 @@ kyoya67-todo/
 │   │   ├── auth/
 │   │   ├── database/
 │   │   │   └── sqlc/
-│   │   ├── handler/
 │   │   ├── middleware/
 │   │   ├── openapi/
-│   │   ├── repository/
 │   │   ├── router/
-│   │   └── service/
+│   │   └── todo/
 │   └── db/
 │       ├── migration/
 │       └── query/
@@ -90,6 +88,7 @@ kyoya67-todo/
 │       ├── amplify/
 │       ├── ecr/
 │       ├── ecs/
+│       ├── elasticache/
 │       ├── iam/
 │       ├── internet_gateway/
 │       ├── logs/
@@ -126,7 +125,7 @@ kyoya67-todo/
 
 `backend/Dockerfile`はGoのバックエンドコンテナイメージを作成するマルチステージDockerfileとし、ローカル環境とAWS ECS Fargateで共通利用する。実行環境固有の設定はDockerfileに埋め込まず、ローカルでは`compose.yaml`、AWSではECSタスク定義から環境変数・シークレットを注入する。
 
-`compose.yaml`では、バックエンド、PostgreSQL、Swagger UIを別々のコンテナとして起動する。バックエンドはComposeネットワーク上のサービス名`db`をDBホストとして利用し、PostgreSQLのhealthcheckが成功してから起動する。バックエンドのコンテナ内部ポートは`BACKEND_CONTAINER_PORT`で管理し、Goアプリの待受ポート、Dockerfileの`EXPOSE`、Composeのコンテナ側ポートへ同じ値を渡す。ホスト側の公開ポートはルート`.env`の`BACKEND_PORT`、`DB_PORT`、`SWAGGER_UI_PORT`で変更できる。
+`compose.yaml`では、バックエンド、PostgreSQL、Redis、Swagger UIを別々のコンテナとして起動する。バックエンドはComposeネットワーク上のサービス名`db`をDBホスト、`redis`を一時認証データの保存先として利用し、双方のhealthcheckが成功してから起動する。Redisのホスト側公開は`127.0.0.1`に限定する。バックエンドのコンテナ内部ポートは`BACKEND_CONTAINER_PORT`で管理し、Goアプリの待受ポート、Dockerfileの`EXPOSE`、Composeのコンテナ側ポートへ同じ値を渡す。ホスト側の公開ポートはルート`.env`の`BACKEND_PORT`、`DB_PORT`、`REDIS_PORT`、`SWAGGER_UI_PORT`で変更できる。
 
 #### CORS
 
@@ -261,9 +260,31 @@ AIの具体的な利用履歴、代表的なプロンプト、採用・修正・
 
 Issue #11ではCognitoを使わず、既存のGoバックエンドでWebAuthnによるパスキー認証を実装する。暗号処理は実績あるライブラリへ委ねる。メール、パスワード、OTPを要求せず、パスキーだけで新規登録とログインを行う。ローカルとAWSでは同じコード・マイグレーションを使用するが、ユーザー・公開鍵・TODOは各環境のPostgreSQLに別々に保存する。RP IDと許可Originを環境ごとに設定し、全パスキーを失った場合のアカウント復旧は提供しない。CognitoによるDev/Prod User Pool共有案は、開発者ごとに独立したローカル認証環境を再現できないため取り下げた。
 
-認証コードは`internal/auth/`へまとめ、WebAuthn初期化、登録・ログイン、セッション処理を小さな単位で追加する。既存のTODO実装は`internal/handler`、`internal/service`、`internal/repository`に分離され、OpenAPI生成コードと接続されている。提示された`internal/todo/`と`cmd/server/`への移動は認証導入と同時に行わず、互換性を確認してから段階的に検討する。最初の単位としてGo 1.25と互換性のある`go-webauthn/webauthn` v0.17.4を導入し、ローカルの`localhost`と本番HTTPSのRP ID・Origin設定を検証する初期化処理を追加した。現時点ではルーティングやDBにはまだ接続していない。
+認証コードは`internal/auth/`へまとめ、WebAuthn初期化、登録・ログイン、セッション処理を小さな単位で追加する。TODOコードも`internal/todo/`へ集約し、各機能ディレクトリ内でHandler・Service・Repositoryの責務をファイル単位で分ける。TODOの層別パッケージを移動した理由は、認証とTODOの機能境界を揃え、機能の変更時に関連コードを追いやすくするため。別パッケージであった内部インターフェースの名前は衝突を避けるため調整したが、生成されたOpenAPIのルーティングとの接続は維持する。`cmd/api/`は変更しない。Go 1.25と互換性のある`go-webauthn/webauthn` v0.17.4を使用し、登録開始・登録完了のHandlerとServiceをOpenAPI生成ルーティングへ接続した。
 
-登録フローの保存先として、`users`と`passkey_credentials`を追加する。ユーザーIDはランダムなUUIDとしてアプリ側で生成し、Credential IDはバイナリの主キーとして一意に保持する。ライブラリが返す公開鍵や署名カウンターを含むCredential情報はJSONBで保存し、ユーザーIDへの外部キーを持たせる。登録完了時のユーザー作成とCredential保存は同一トランザクションにする予定で、検証が成功するまで確定しない。今回のスキーマ追加は既存の`todos`には触れない。既存TODOを認証ユーザーへどう紐付けるか、チャレンジとセッションの保存方法は後続の設計・実装で決める。
+登録フローの保存先として、`users`と`passkey_credentials`を使用する。ユーザーIDはServiceがランダムなUUIDとして生成し、Credential IDはバイナリの主キーとして一意に保持する。ライブラリが返す公開鍵や署名カウンターを含むCredential情報はJSONBで保存し、ユーザーIDへの外部キーを持たせる。Repositoryではユーザー作成とCredential保存を同一トランザクションで行い、一方が失敗した場合は両方を確定しない。
+
+#### パスキー登録の責務分担
+
+| 対象 | 責務 |
+|---|---|
+| Handler | HTTPのOrigin・Content-Type・本文サイズ・JSON形式を確認し、ライブラリで応答をパースする。Serviceの結果をHTTPステータスへ変換し、内部エラーを外へ返さない |
+| Service | ユーザーID発行、登録期限・チャレンジの使い捨て、WebAuthn検証、検証済みCredentialの必須項目確認、保存依頼を行う。Echoには依存しない |
+| WebAuthn初期化 | RP ID・許可Origin、discoverable credential必須、ユーザー検証必須、登録タイムアウトを設定する。暗号処理はライブラリに委ねる |
+| Repository | ユーザーとCredentialを同一トランザクションで保存する。Credentialは値で受け取り、nilの扱いを不要にする |
+| ChallengeStore | Redisに登録中のデータをTTL付きで保存し、`GETDEL`で一度だけ取り出す。Serviceが利用するinterfaceの実装として扱う |
+
+`POST /auth/registration/begin`は5分間有効な登録IDとWebAuthn作成オプションを返す。ブラウザの応答を`POST /auth/registration/finish`へ送り、検証成功時のみユーザーとCredentialを保存して204を返す。この段階ではログインCookieを発行しない。HandlerとService、Serviceと保存先はinterfaceで接続する。
+
+チャレンジを含むライブラリのSessionDataは、RedisへTTL付きで保存する。これはログイン後のセッションとは別の、登録中だけのデータである。登録IDは暗号学的乱数32バイトで生成し、RedisのキーにはSHA-256ハッシュだけを含める。`SET NX`で衝突を拒否し、登録完了時に`GETDEL`で原子的に消費する。検証失敗やDB保存失敗の場合も同じ登録IDは再利用できず、ユーザーは登録開始からやり直す。期限切れキーはRedisが自動削除する。
+
+初期案のPostgreSQL専用テーブルは、Issue #11の設計相談で、ログイン時のチャレンジとCookieセッションもRedisへ保存する方針に変更したため、未適用のマイグレーション003ごと取り下げた。永続データ（ユーザー・Credential・TODO）はPostgreSQL、一時的な認証データはRedisと分ける。ローカルはCompose、AWSはプライベートサブネットのElastiCache for Redis OSSを使用する。ECSからRedisへの6379番ポートのみ許可し、AWS側の接続はTLS必須、ローカルはループバックへのポート公開とCompose内通信を使用する。Redisへのアクセス制御はVPCとSecurity Groupで行い、現時点ではRedis AUTHトークンを設定しない。1ノード構成はコストを抑えるが、ノード障害や再作成時には登録中のデータが失われ、登録をやり直す必要がある。ElastiCacheはECS Serviceを停止しても費用が継続するため、AWSへの適用は別途確認する。
+
+`WEBAUTHN_RP_ID`と`WEBAUTHN_ORIGIN`を環境変数で指定する。Composeの既定値は`localhost`と`http://localhost:3000`で、Redis接続先はコンテナ内の`redis:6379`。ホスト上でGoを直接実行する場合はRP ID・Originと`REDIS_ADDR=localhost:6379`を指定する。両方未設定の場合は登録APIのみ503、片方だけ設定した場合やWebAuthn有効時のRedis接続先未指定は起動エラーにする。AWSではElastiCacheのエンドポイントを`REDIS_ADDR`、TLS接続を`REDIS_TLS=true`としてECSに渡す。登録APIではフロントエンドのOriginとの完全一致を要求するため、通常のSwagger UIのOrigin（8081）からの登録は403になる。WebAuthn自体のOriginもライブラリで検証する。
+
+今回の登録処理は、一時テストDBとローカルRedisを使用したHTTP→実ライブラリ→Redis→実DBの統合テストで確認する。静的フロントエンドに登録ボタンを追加し、登録開始APIのbase64url値をブラウザのWebAuthn APIが要求するバイト列に変換してから`navigator.credentials.create`を呼び、作成されたCredentialをbase64urlに戻して登録完了APIへ送信する。登録後にログイン済みとは表示しない。端末の実パスキーを利用したブラウザ確認は未実施。開発DBにはユーザー・Credential用の002まで適用し、Redisを起動してバックエンドを再ビルド・再起動する。ログイン・Cookieセッション・CSRF対策・レート制限・TODO所有者の認可・AWS上の接続確認は、Issue #11の後続実装とする。現段階ではIssue #11全体の完了や本番運用可能な認証機能とは扱わない。
+
+今回の実装にはOpenAI Codexを利用した。開発者の「それぞれの責務を考えた上でhandlerとserviceも作っちゃって」という依頼と、Repositoryに置いた入力確認の責務への指摘を受け、上記の分離とテストを追加した。その後の「ログイン時のチャレンジやセッションもredis使う予定だからやはりチャレンジはredisにしよう」という判断に合わせて保存先を変更した。対応PRは未作成のため、PR番号確定時に`ai-usage/PR-<番号>.md`へ利用内容と検証結果を記録する。
 
 ### 3.3 非機能要件・開発上の方針
 
@@ -415,7 +436,7 @@ flowchart TD
     ECS -.->|Logs| CW
 ```
 
-Terraformのルート設定からAWSサービス単位のモジュールを呼び出す。VPC、ネットワーク、セキュリティグループ、ALB、ECS、ECR、RDS、Secrets Manager、CloudWatch Logs、IAMを分離して管理し、ルートの`aws.tf`ではモジュール間の依存関係を接続する。
+Terraformのルート設定からAWSサービス単位のモジュールを呼び出す。VPC、ネットワーク、セキュリティグループ、ALB、ECS、ECR、RDS、ElastiCache、Secrets Manager、CloudWatch Logs、IAMを分離して管理し、ルートの`aws.tf`ではモジュール間の依存関係を接続する。
 
 RDSはプライベートサブネットに配置し、ALBはパブリックサブネットに配置する。ECSタスクはコストを抑えるため初期のdesired countを0とし、必要時だけ起動する。RDSの`rds.force_ssl`を有効化し、ECSでは`sslmode=verify-full`とAWS RDS CAバンドルを指定する。ローカルComposeではPostgreSQLがTLS未設定のため、`DB_SSLMODE=disable`を既定値とし、環境変数で接続設定を切り替える。
 

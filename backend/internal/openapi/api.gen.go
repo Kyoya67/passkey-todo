@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	protocol "github.com/go-webauthn/webauthn/protocol"
 	"github.com/labstack/echo/v4"
 	"github.com/oapi-codegen/runtime"
 )
@@ -23,6 +24,20 @@ import (
 type HealthResponse struct {
 	// Status Example: ok
 	Status string `json:"status"`
+}
+
+// RegistrationOptions defines model for RegistrationOptions.
+type RegistrationOptions struct {
+	Options WebAuthnCreationOptions `json:"options"`
+
+	// RegistrationId 登録完了に必要なランダムトークン。ログへ記録しない。
+	RegistrationId string `json:"registrationId"`
+}
+
+// RegistrationRequest defines model for RegistrationRequest.
+type RegistrationRequest struct {
+	Credential     WebAuthnCredential `json:"credential"`
+	RegistrationId string             `json:"registrationId"`
 }
 
 // Todo defines model for Todo.
@@ -50,6 +65,12 @@ type TodoRequest struct {
 	Title string `json:"title"`
 }
 
+// WebAuthnCreationOptions defines model for WebAuthnCreationOptions.
+type WebAuthnCreationOptions = protocol.CredentialCreation
+
+// WebAuthnCredential defines model for WebAuthnCredential.
+type WebAuthnCredential = protocol.CredentialCreationResponse
+
 // LimitQuery defines model for LimitQuery.
 type LimitQuery = int32
 
@@ -74,6 +95,9 @@ type ListTodosParams struct {
 	Offset *OffsetQuery `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// FinishRegistrationJSONRequestBody defines body for FinishRegistration for application/json ContentType.
+type FinishRegistrationJSONRequestBody = RegistrationRequest
+
 // CreateTodoJSONRequestBody defines body for CreateTodo for application/json ContentType.
 type CreateTodoJSONRequestBody = TodoRequest
 
@@ -82,6 +106,12 @@ type UpdateTodoJSONRequestBody = TodoRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// BeginRegistration パスキー登録を開始
+	// (POST /auth/registration/begin)
+	BeginRegistration(ctx echo.Context) error
+	// FinishRegistration パスキー登録を完了
+	// (POST /auth/registration/finish)
+	FinishRegistration(ctx echo.Context) error
 	// GetHealth ヘルスチェック
 	// (GET /health)
 	GetHealth(ctx echo.Context) error
@@ -102,6 +132,24 @@ type ServerInterface interface {
 // ServerInterfaceWrapper converts echo contexts to parameters.
 type ServerInterfaceWrapper struct {
 	Handler ServerInterface
+}
+
+// BeginRegistration converts echo context to params.
+func (w *ServerInterfaceWrapper) BeginRegistration(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.BeginRegistration(ctx)
+	return err
+}
+
+// FinishRegistration converts echo context to params.
+func (w *ServerInterfaceWrapper) FinishRegistration(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.FinishRegistration(ctx)
+	return err
 }
 
 // GetHealth converts echo context to params.
@@ -233,6 +281,8 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 		Handler: si,
 	}
 
+	router.POST(options.BaseURL+"/auth/registration/begin", wrapper.BeginRegistration, options.OperationMiddlewares["beginRegistration"]...)
+	router.POST(options.BaseURL+"/auth/registration/finish", wrapper.FinishRegistration, options.OperationMiddlewares["finishRegistration"]...)
 	router.GET(options.BaseURL+"/health", wrapper.GetHealth, options.OperationMiddlewares["getHealth"]...)
 	router.GET(options.BaseURL+"/todos", wrapper.ListTodos, options.OperationMiddlewares["listTodos"]...)
 	router.POST(options.BaseURL+"/todos", wrapper.CreateTodo, options.OperationMiddlewares["createTodo"]...)
@@ -246,26 +296,44 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"MXuH/gXGoYuu7dU5eNu8xqF8pfy/AAAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

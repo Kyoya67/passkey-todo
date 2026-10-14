@@ -17,6 +17,21 @@
           ><span id="health-status">未確認</span>
         </div>
       </header>
+      <section class="panel passkey-panel" aria-labelledby="passkey-heading">
+        <div>
+          <p class="eyebrow">PASSKEY</p>
+          <h2 id="passkey-heading">パスキーを登録</h2>
+          <p class="passkey-note">
+            この端末のパスキーで新しいユーザーを作成します。登録後のログイン機能はまだありません。
+          </p>
+        </div>
+        <div class="passkey-action">
+          <button id="register-passkey" type="button" class="button primary">
+            パスキーを登録する
+          </button>
+          <p id="passkey-status" role="status" aria-live="polite"></p>
+        </div>
+      </section>
       <section class="panel composer">
         <div>
           <p class="eyebrow">NEW TASK</p>

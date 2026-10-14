@@ -3,17 +3,23 @@ package router
 import (
 	"github.com/labstack/echo/v4"
 
+	"github.com/catechlounge/kyoya67-todo/backend/internal/auth"
 	sqlc "github.com/catechlounge/kyoya67-todo/backend/internal/database/sqlc"
-	"github.com/catechlounge/kyoya67-todo/backend/internal/handler"
 	"github.com/catechlounge/kyoya67-todo/backend/internal/openapi"
-	"github.com/catechlounge/kyoya67-todo/backend/internal/repository"
-	"github.com/catechlounge/kyoya67-todo/backend/internal/service"
+	"github.com/catechlounge/kyoya67-todo/backend/internal/todo"
 )
 
-func Register(e *echo.Echo, queries *sqlc.Queries) {
-	todoRepository := repository.NewTodoRepository(queries)
-	todoService := service.NewTodoService(todoRepository)
-	todoHandler := handler.NewTodoHandler(todoService)
+type handlers struct {
+	*todo.TodoHandler
+	*auth.Handler
+}
 
-	openapi.RegisterHandlers(e, todoHandler)
+var _ openapi.ServerInterface = (*handlers)(nil)
+
+func Register(e *echo.Echo, queries *sqlc.Queries, authHandler *auth.Handler) {
+	todoRepository := todo.NewTodoRepository(queries)
+	todoService := todo.NewTodoService(todoRepository)
+	todoHandler := todo.NewTodoHandler(todoService)
+
+	openapi.RegisterHandlers(e, &handlers{TodoHandler: todoHandler, Handler: authHandler})
 }

@@ -1,4 +1,4 @@
-package handler
+package todo
 
 import (
 	"context"
@@ -9,19 +9,18 @@ import (
 
 	sqlc "github.com/catechlounge/kyoya67-todo/backend/internal/database/sqlc"
 	"github.com/catechlounge/kyoya67-todo/backend/internal/openapi"
-	"github.com/catechlounge/kyoya67-todo/backend/internal/service"
 )
 
-type TodoService interface {
+type todoService interface {
 	Create(context.Context, string) error
 	List(context.Context, string, int32, int32) ([]sqlc.Todo, error)
 	Update(context.Context, int64, string) error
 	Delete(context.Context, int64) error
 }
 
-type TodoHandler struct{ service TodoService }
+type TodoHandler struct{ service todoService }
 
-func NewTodoHandler(service TodoService) *TodoHandler {
+func NewTodoHandler(service todoService) *TodoHandler {
 	return &TodoHandler{service: service}
 }
 
@@ -35,7 +34,7 @@ func (h *TodoHandler) CreateTodo(c echo.Context) error {
 		return c.NoContent(http.StatusBadRequest)
 	}
 	if err := h.service.Create(c.Request().Context(), request.Title); err != nil {
-		if errors.Is(err, service.ErrInvalidTitle) {
+		if errors.Is(err, ErrInvalidTitle) {
 			return c.NoContent(http.StatusBadRequest)
 		}
 		return c.NoContent(http.StatusServiceUnavailable)
@@ -56,7 +55,7 @@ func (h *TodoHandler) ListTodos(c echo.Context, params openapi.ListTodosParams) 
 		offset = *params.Offset
 	}
 	todos, err := h.service.List(c.Request().Context(), title, limit, offset)
-	if errors.Is(err, service.ErrInvalidPage) {
+	if errors.Is(err, ErrInvalidPage) {
 		return c.NoContent(http.StatusBadRequest)
 	}
 	if err != nil {
@@ -75,10 +74,10 @@ func (h *TodoHandler) UpdateTodo(c echo.Context, id openapi.TodoID) error {
 		return c.NoContent(http.StatusBadRequest)
 	}
 	err := h.service.Update(c.Request().Context(), id, request.Title)
-	if errors.Is(err, service.ErrInvalidTitle) {
+	if errors.Is(err, ErrInvalidTitle) {
 		return c.NoContent(http.StatusBadRequest)
 	}
-	if errors.Is(err, service.ErrTodoNotFound) {
+	if errors.Is(err, ErrTodoNotFound) {
 		return c.NoContent(http.StatusNotFound)
 	}
 	if err != nil {
@@ -89,7 +88,7 @@ func (h *TodoHandler) UpdateTodo(c echo.Context, id openapi.TodoID) error {
 
 func (h *TodoHandler) DeleteTodo(c echo.Context, id openapi.TodoID) error {
 	if err := h.service.Delete(c.Request().Context(), id); err != nil {
-		if errors.Is(err, service.ErrTodoNotFound) {
+		if errors.Is(err, ErrTodoNotFound) {
 			return c.NoContent(http.StatusNotFound)
 		}
 		return c.NoContent(http.StatusServiceUnavailable)

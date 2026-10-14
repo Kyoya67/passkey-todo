@@ -1,4 +1,4 @@
-package handler
+package todo
 
 import (
 	"context"
@@ -15,7 +15,6 @@ import (
 
 	sqlc "github.com/catechlounge/kyoya67-todo/backend/internal/database/sqlc"
 	"github.com/catechlounge/kyoya67-todo/backend/internal/openapi"
-	"github.com/catechlounge/kyoya67-todo/backend/internal/service"
 )
 
 type fakeTodoService struct {
@@ -79,7 +78,7 @@ func TestTodoHandlerCreate(t *testing.T) {
 		err  error
 		want int
 	}{
-		{name: "invalid title", err: service.ErrInvalidTitle, want: http.StatusBadRequest},
+		{name: "invalid title", err: ErrInvalidTitle, want: http.StatusBadRequest},
 		{name: "service error", err: errors.New("failed"), want: http.StatusServiceUnavailable},
 		{name: "success", err: nil, want: http.StatusNoContent},
 	} {
@@ -132,8 +131,8 @@ func TestTodoHandlerUpdateAndDelete(t *testing.T) {
 		err  error
 		want int
 	}{
-		{name: "invalid title", err: service.ErrInvalidTitle, want: http.StatusBadRequest},
-		{name: "not found", err: service.ErrTodoNotFound, want: http.StatusNotFound},
+		{name: "invalid title", err: ErrInvalidTitle, want: http.StatusBadRequest},
+		{name: "not found", err: ErrTodoNotFound, want: http.StatusNotFound},
 		{name: "service error", err: errors.New("failed"), want: http.StatusServiceUnavailable},
 		{name: "success", err: nil, want: http.StatusNoContent},
 	} {

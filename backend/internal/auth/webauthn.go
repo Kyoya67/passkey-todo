@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
@@ -22,5 +23,12 @@ func NewWebAuthn(rpID, origin string) (*webauthn.WebAuthn, error) {
 		RPID:          rpID,
 		RPDisplayName: "Kyoya67 TODO",
 		RPOrigins:     []string{origin},
+		AuthenticatorSelection: protocol.AuthenticatorSelection{
+			ResidentKey:      protocol.ResidentKeyRequirementRequired,
+			UserVerification: protocol.VerificationRequired,
+		},
+		Timeouts: webauthn.TimeoutsConfig{Registration: webauthn.TimeoutConfig{
+			Enforce: true, Timeout: registrationLifetime, TimeoutUVD: registrationLifetime,
+		}},
 	})
 }
