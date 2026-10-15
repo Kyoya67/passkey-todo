@@ -226,6 +226,7 @@ const priorityLevel = (todo) => todo.priorityLevel || 'medium';
 const sortByPriority = (a, b) => (a.priority ?? 0) - (b.priority ?? 0) || a.id - b.id;
 let currentTodos = new Map();
 let draggedTodoID = null;
+let draggedCard = null;
 let dragPlacement = null;
 let statusBusy = false;
 let touchDrag = null;
@@ -291,8 +292,8 @@ const renderBoard = (todos) => {
 
 const clearDrag = () => {
   draggedTodoID = null;
+  draggedCard = null;
   dragPlacement = null;
-  list.style?.removeProperty('--sort-gap');
   list
     .querySelectorAll(
       '.is-drop-target, .is-group-target, .is-dragging, .is-drop-before, .is-drop-after'
@@ -306,6 +307,30 @@ const clearDrag = () => {
         'is-drop-after'
       );
     });
+};
+
+// Animate neighbouring cards when the dragged card changes its place in the DOM.
+const reorderDuringDrag = (card, target, after) => {
+  const parent = target?.parentElement;
+  if (!card || !parent || card === target || !parent.insertBefore) return;
+  if (card.parentElement !== parent) return; // Cross-group moves are persisted on drop.
+  if (after ? target.nextElementSibling === card : card.nextElementSibling === target) return;
+  const before = new Map(
+    [...parent.querySelectorAll('.todo')].map((element) => [element, element.getBoundingClientRect()])
+  );
+  parent.insertBefore(card, after ? target.nextSibling : target);
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  for (const [element, previous] of before) {
+    if (element === card || !element.animate) continue;
+    const current = element.getBoundingClientRect();
+    const dy = previous.top - current.top;
+    if (Math.abs(dy) < 1) continue;
+    element.getAnimations?.().forEach((animation) => animation.cancel());
+    element.animate(
+      [{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }],
+      { duration: 200, easing: 'cubic-bezier(0.2, 0.75, 0.25, 1)' }
+    );
+  }
 };
 
 const highlightPosition = (target, id, clientY) => {
@@ -353,7 +378,14 @@ const highlightPosition = (target, id, clientY) => {
     item.classList.remove('is-drop-before', 'is-drop-after');
   });
   dragPlacement = placement;
-  if (card) card.classList.add(after ? 'is-drop-after' : 'is-drop-before');
+  if (card) {
+    const source = draggedCard || touchDrag?.card;
+    if (source && source.parentElement === card.parentElement) {
+      reorderDuringDrag(source, card, after);
+    } else {
+      card.classList.add(after ? 'is-drop-after' : 'is-drop-before');
+    }
+  }
 };
 
 const highlightColumn = (column) => {
@@ -400,7 +432,6 @@ const clearTouchDrag = () => {
   highlightColumn(null);
   highlightGroup(null);
   dragPlacement = null;
-  list.style?.removeProperty('--sort-gap');
   list.querySelectorAll('.is-drop-before, .is-drop-after').forEach((card) => {
     card.classList.remove('is-drop-before', 'is-drop-after');
   });
@@ -561,10 +592,8 @@ list.addEventListener('dragstart', (event) => {
     return;
   }
   draggedTodoID = item.dataset.id;
+  draggedCard = item;
   dragPlacement = null;
-  if (item.getBoundingClientRect) {
-    list.style?.setProperty('--sort-gap', `${item.getBoundingClientRect().height}px`);
-  }
   event.dataTransfer.effectAllowed = 'move';
   event.dataTransfer.setData('text/plain', draggedTodoID);
   item.classList.add('is-dragging');
@@ -619,7 +648,6 @@ list.addEventListener('pointerdown', (event) => {
     if (!touchDrag || touchDrag.pointerId !== event.pointerId) return;
     touchDrag.active = true;
     dragPlacement = null;
-    list.style?.setProperty('--sort-gap', `${card.getBoundingClientRect().height}px`);
     card.classList.add('is-dragging');
     const ghost = card.cloneNode(true);
     ghost.classList.add('touch-drag-preview');
