@@ -19,7 +19,10 @@ SELECT
 FROM todos
 WHERE user_id = sqlc.arg(owner_id)::uuid
   AND title ILIKE '%' || sqlc.arg(title)::text || '%'
-ORDER BY status, priority, id
+ORDER BY status,
+    CASE WHEN status <> 'completed' THEN priority END ASC NULLS LAST,
+    CASE WHEN status = 'completed' THEN updated_at END DESC NULLS LAST,
+    id
 LIMIT sqlc.arg(page_limit)::int
 OFFSET sqlc.arg(page_offset)::int;
 

@@ -53,6 +53,9 @@ func (r *Repository) Move(ctx context.Context, userID [16]byte, id int64, before
 	if err := tx.QueryRow(ctx, "SELECT status FROM todos WHERE id = $1 AND user_id = $2", id, owner).Scan(&status); err != nil {
 		return err
 	}
+	if status == StatusCompleted {
+		return ErrInvalidPosition
+	}
 	rows, err := tx.Query(ctx, "SELECT id FROM todos WHERE user_id = $1 AND status = $2 ORDER BY priority, id", owner, status)
 	if err != nil {
 		return err

@@ -154,6 +154,17 @@ func TestRepositoryIntegration(t *testing.T) {
 	if err != nil || retained.Status != StatusCompleted {
 		t.Fatalf("retained status=%q err=%v", retained.Status, err)
 	}
+	time.Sleep(2 * time.Millisecond)
+	if _, err := repository.Update(ctx, ownerA, second.ID, title, StatusCompleted); err != nil {
+		t.Fatalf("complete second todo: %v", err)
+	}
+	completed, err := repository.List(ctx, ownerA, title, 10, 0)
+	if err != nil || len(completed) != 2 || completed[0].ID != second.ID {
+		t.Fatalf("completed todos must be sorted by recent update: %+v err=%v", completed, err)
+	}
+	if err := repository.Move(ctx, ownerA, second.ID, &created.ID); !errors.Is(err, ErrInvalidPosition) {
+		t.Fatalf("completed todo must not be reordered: %v", err)
+	}
 
 	if err := repository.Delete(ctx, ownerA, created.ID); err != nil {
 		t.Fatalf("delete todo: %v", err)

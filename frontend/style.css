@@ -225,9 +225,9 @@ form input {
   color: #16816d;
 }
 .board-hint {
-  margin: 16px 0 0;
+  margin: 8px 0 0;
   color: #687670;
-  font-size: 13px;
+  font-size: 12px;
 }
 .kanban-board {
   display: grid;

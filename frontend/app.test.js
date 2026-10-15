@@ -19,6 +19,7 @@ function setup({ failUpdate = false } = {}) {
     { id: 2, title: 'Two', status: 'in_progress', priority: 1, updatedAt: '2026-10-15T00:00:00Z' },
     { id: 3, title: 'Three', status: 'completed', priority: 1, updatedAt: '2026-10-15T00:00:00Z' },
     { id: 4, title: 'Four', status: 'not_started', priority: 2, updatedAt: '2026-10-15T00:00:00Z' },
+    { id: 5, title: 'Five', status: 'completed', priority: 0, updatedAt: '2026-10-14T00:00:00Z' },
   ];
   const element = () => ({
     value: '',
@@ -274,4 +275,42 @@ test('dropping below a card places the todo at the end of the column', async () 
   });
   const move = calls.find(({ url }) => url.endsWith('/todos/1/position'));
   assert.deepEqual(JSON.parse(move.options.body), { beforeId: null });
+});
+
+test('completed cards ignore priority and cannot be reordered within the completed column', async () => {
+  const { list, listeners, calls } = setup();
+  await tick();
+  assert.match(list.innerHTML, /data-status="completed"[\s\S]*data-id="3"[\s\S]*data-id="5"/);
+  const source = { dataset: { id: '5' }, classList: { add() {} } };
+  const column = { dataset: { status: 'completed' } };
+  const target = {
+    dataset: { id: '3' },
+    getBoundingClientRect: () => ({ top: 0, height: 100 }),
+  };
+  listeners.dragstart({
+    target: { closest: (selector) => (selector === '.todo' ? source : null) },
+    dataTransfer: { setData() {} },
+    preventDefault() {},
+  });
+  await listeners.drop({
+    target: { closest: (selector) => (selector === '.todo' ? target : column) },
+    clientY: 20,
+    preventDefault() {},
+  });
+  assert.equal(calls.some(({ url }) => url.endsWith('/todos/5/position')), false);
+});
+
+test('completed cards can still be moved to another status', async () => {
+  const { listeners, calls } = setup();
+  await tick();
+  const source = { dataset: { id: '3' }, classList: { add() {} } };
+  const column = { dataset: { status: 'not_started' } };
+  listeners.dragstart({
+    target: { closest: (selector) => (selector === '.todo' ? source : null) },
+    dataTransfer: { setData() {} },
+    preventDefault() {},
+  });
+  await listeners.drop({ target: { closest: () => column }, preventDefault() {} });
+  const update = calls.find(({ url }) => url.endsWith('/todos/3'));
+  assert.equal(JSON.parse(update.options.body).status, 'not_started');
 });

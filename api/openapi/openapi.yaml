@@ -248,7 +248,7 @@ paths:
       security:
         - todoSession: []
       summary: TODOを同じ状態の列内で並べ替える
-      description: beforeIdを指定するとそのTODOの直前へ、省略またはnullの場合は列末尾へ移動する。別の状態のTODOは指定できない
+      description: 未着手・進行中のTODOのみ並べ替えられる。beforeIdを指定するとそのTODOの直前へ、省略またはnullの場合は列末尾へ移動する。完了したTODOや別の状態のTODOは指定できない
       operationId: moveTodo
       parameters:
         - $ref: '#/components/parameters/TodoID'
@@ -509,7 +509,7 @@ components:
         priority:
           type: integer
           format: int64
-          description: 同じ状態の列内の表示順。小さいほど上
+      description: 未着手・進行中の列内の表示順。小さいほど上。完了では使用しない
         createdAt:
           type: string
           format: date-time

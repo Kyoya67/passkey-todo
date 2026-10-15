@@ -212,7 +212,11 @@ const renderBoard = (todos) => {
     .map(({ status, label }) => {
       const cards = todos
         .filter((todo) => todo.status === status)
-        .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0) || a.id - b.id);
+        .sort((a, b) =>
+          status === 'completed'
+            ? new Date(b.updatedAt) - new Date(a.updatedAt) || b.id - a.id
+            : (a.priority ?? 0) - (b.priority ?? 0) || a.id - b.id
+        );
       return `<section class="kanban-column" data-status="${status}" aria-label="${label}">
         <div class="column-heading"><h3>${label}</h3><span class="column-count">${cards.length}</span></div>
         <div class="column-cards">${cards.map(renderCard).join('')}</div>
@@ -238,6 +242,7 @@ const highlightPosition = (target, id, clientY) => {
   const column = target?.closest('.kanban-column');
   if (
     !card ||
+    column?.dataset.status === 'completed' ||
     card.dataset.id === String(id) ||
     column?.dataset.status !== currentTodos.get(String(id))?.status
   )
@@ -293,7 +298,7 @@ const updateStatus = async (id, status) => {
 };
 const movePriority = async (id, targetID, after = false) => {
   const todo = currentTodos.get(String(id));
-  if (!todo || statusBusy) return;
+  if (!todo || todo.status === 'completed' || statusBusy) return;
   const ids = [...currentTodos.values()]
     .filter((item) => item.status === todo.status)
     .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0) || a.id - b.id)
@@ -325,6 +330,7 @@ const dropTodo = async (id, column, target, clientY) => {
   const todo = currentTodos.get(String(id));
   if (!todo) return;
   if (todo.status !== column.dataset.status) return updateStatus(id, column.dataset.status);
+  if (todo.status === 'completed') return;
   const card = target?.closest('.todo');
   const targetID = card?.dataset.id;
   const midpoint = card?.getBoundingClientRect
@@ -387,6 +393,11 @@ list.addEventListener('dragstart', (event) => {
 list.addEventListener('dragover', (event) => {
   const column = event.target.closest('.kanban-column');
   if (!column || !draggedTodoID || statusBusy) return;
+  if (column.dataset.status === 'completed' && currentTodos.get(draggedTodoID)?.status === 'completed') {
+    highlightColumn(null);
+    highlightPosition(null, draggedTodoID, event.clientY);
+    return;
+  }
   event.preventDefault();
   event.dataTransfer.dropEffect = 'move';
   highlightColumn(column);
@@ -447,7 +458,9 @@ window.addEventListener('pointermove', (event) => {
   touchDrag.ghost.style.left = `${event.clientX}px`;
   touchDrag.ghost.style.top = `${event.clientY}px`;
   const target = document.elementFromPoint(event.clientX, event.clientY);
-  highlightColumn(target?.closest('.kanban-column'));
+  const column = target?.closest('.kanban-column');
+  const sameCompleted = column?.dataset.status === 'completed' && currentTodos.get(touchDrag.id)?.status === 'completed';
+  highlightColumn(sameCompleted ? null : column);
   highlightPosition(target, touchDrag.id, event.clientY);
 });
 window.addEventListener('pointerup', async (event) => {
