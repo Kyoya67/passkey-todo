@@ -7,7 +7,7 @@ func TestLoad(t *testing.T) {
 		name, rpID, origin string
 		wantErr            bool
 	}{
-		{name: "auth disabled"},
+		{name: "missing auth configuration", wantErr: true},
 		{name: "local auth", rpID: "localhost", origin: "http://localhost:3000"},
 		{name: "RP ID only", rpID: "localhost", wantErr: true},
 		{name: "origin only", origin: "http://localhost:3000", wantErr: true},

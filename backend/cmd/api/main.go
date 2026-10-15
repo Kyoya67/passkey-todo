@@ -40,27 +40,24 @@ func main() {
 	e := echo.New()
 	e.Use(middleware.CORS(cfg.CORSAllowedOrigins))
 
-	authHandler := auth.NewHandler(nil, "")
-	if cfg.WebAuthnRPID != "" {
-		redisOptions := &redis.Options{Addr: cfg.RedisAddress}
-		if cfg.RedisTLS {
-			redisOptions.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
-		}
-		redisClient := redis.NewClient(redisOptions)
-		defer redisClient.Close()
-		pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		err := redisClient.Ping(pingCtx).Err()
-		cancel()
-		if err != nil {
-			log.Fatalf("connect Redis: %v", err)
-		}
-		verifier, err := auth.NewWebAuthn(cfg.WebAuthnRPID, cfg.WebAuthnOrigin)
-		if err != nil {
-			log.Fatalf("configure WebAuthn: %v", err)
-		}
-		authService := auth.NewService(verifier, auth.NewRepository(pool), auth.NewChallengeStore(redisClient))
-		authHandler = auth.NewHandler(authService, cfg.WebAuthnOrigin)
+	redisOptions := &redis.Options{Addr: cfg.RedisAddress}
+	if cfg.RedisTLS {
+		redisOptions.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
+	redisClient := redis.NewClient(redisOptions)
+	defer redisClient.Close()
+	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	err = redisClient.Ping(pingCtx).Err()
+	cancel()
+	if err != nil {
+		log.Fatalf("connect Redis: %v", err)
+	}
+	verifier, err := auth.NewWebAuthn(cfg.WebAuthnRPID, cfg.WebAuthnOrigin)
+	if err != nil {
+		log.Fatalf("configure WebAuthn: %v", err)
+	}
+	authService := auth.NewService(verifier, auth.NewRepository(pool), auth.NewChallengeStore(redisClient))
+	authHandler := auth.NewHandler(authService, cfg.WebAuthnOrigin)
 	router.Register(e, todoHandler, authHandler)
 
 	e.Logger.Fatal(e.Start(":" + cfg.AppPort))

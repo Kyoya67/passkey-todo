@@ -52,11 +52,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("database environment variables are not configured")
 	}
 
-	if (config.WebAuthnRPID == "") != (config.WebAuthnOrigin == "") {
-		return nil, fmt.Errorf("WEBAUTHN_RP_ID and WEBAUTHN_ORIGIN must be configured together")
+	if config.WebAuthnRPID == "" || config.WebAuthnOrigin == "" {
+		return nil, fmt.Errorf("WEBAUTHN_RP_ID and WEBAUTHN_ORIGIN are required")
 	}
-	if config.WebAuthnRPID != "" && config.RedisAddress == "" {
-		return nil, fmt.Errorf("REDIS_ADDR is required when WebAuthn is configured")
+	if config.RedisAddress == "" {
+		return nil, fmt.Errorf("REDIS_ADDR is required")
 	}
 	return config, nil
 }
