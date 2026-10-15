@@ -166,6 +166,10 @@ input:focus {
   background: #17212b;
   color: #fff;
 }
+.secondary {
+  background: #e2eee8;
+  color: #245548;
+}
 .logout-button {
   flex-shrink: 0;
   border: 1px solid #0f5548;
