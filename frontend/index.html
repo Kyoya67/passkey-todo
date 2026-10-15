@@ -7,7 +7,31 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <main class="shell">
+    <dialog id="auth-dialog" class="auth-dialog" aria-labelledby="auth-heading">
+      <div class="auth-dialog-content">
+        <p class="eyebrow">WELCOME TO TODO DESK</p>
+        <h1 id="auth-heading">パスキーで始める</h1>
+        <p class="auth-intro">TODOを使うには、パスキーを登録するかログインしてください。</p>
+        <div class="auth-options">
+          <section class="auth-option" aria-labelledby="register-heading">
+            <p class="eyebrow">NEW HERE?</p>
+            <h2 id="register-heading">はじめて使う</h2>
+            <p>この端末のパスキーでユーザーを作成します。</p>
+            <button id="register-passkey" type="button" class="button primary">
+              パスキーを登録
+            </button>
+          </section>
+          <section class="auth-option" aria-labelledby="login-heading">
+            <p class="eyebrow">WELCOME BACK</p>
+            <h2 id="login-heading">登録済みの方</h2>
+            <p>登録済みのパスキーでログインします。</p>
+            <button id="login-passkey" type="button" class="button secondary">ログイン</button>
+          </section>
+        </div>
+        <p id="auth-status" class="auth-status" role="status" aria-live="polite"></p>
+      </div>
+    </dialog>
+    <main id="todo-app" class="shell" hidden>
       <header class="hero">
         <p class="eyebrow">KYoya67 TODO API</p>
         <p class="lead">シンプルな画面からTODO APIを操作できます。</p>
@@ -17,34 +41,6 @@
           ><span id="health-status">未確認</span>
         </div>
       </header>
-      <section class="panel passkey-panel" aria-labelledby="passkey-heading">
-        <div>
-          <p class="eyebrow">PASSKEY</p>
-          <h2 id="passkey-heading">パスキーを登録</h2>
-          <p class="passkey-note">
-            この端末のパスキーで新しいユーザーを作成します。登録後にログインしてください。
-          </p>
-        </div>
-        <div class="passkey-action">
-          <button id="register-passkey" type="button" class="button primary">
-            パスキーを登録する
-          </button>
-          <p id="passkey-status" role="status" aria-live="polite"></p>
-        </div>
-      </section>
-      <section class="panel passkey-panel" aria-labelledby="login-heading">
-        <div>
-          <p class="eyebrow">SIGN IN</p>
-          <h2 id="login-heading">パスキーでログイン</h2>
-          <p class="passkey-note">
-            ログイン後のみTODOを操作できます。TODOのユーザー別制御は未対応です。
-          </p>
-        </div>
-        <div class="passkey-action">
-          <button id="login-passkey" type="button" class="button primary">ログインする</button>
-          <p id="login-status" role="status" aria-live="polite"></p>
-        </div>
-      </section>
       <section class="panel composer">
         <div>
           <p class="eyebrow">NEW TASK</p>
