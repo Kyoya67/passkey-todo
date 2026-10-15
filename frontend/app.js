@@ -16,7 +16,11 @@ const request = async (path, options = {}) => {
     credentials: 'include',
     headers: { ...headers, ...options.headers },
   });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(`HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
   return response.status === 204 ? null : response.json();
 };
 const show = (text, error = false) => {
@@ -136,6 +140,7 @@ loginButton.addEventListener('click', async () => {
     });
     loginStatus.textContent = 'ログインしました。TODOのユーザー別制御は今後対応します。';
     loginStatus.style.color = '#16816d';
+    await load();
   } catch (error) {
     loginStatus.textContent =
       error.name === 'NotAllowedError'
@@ -166,7 +171,13 @@ async function load() {
           .join('')
       : '<div class="empty">TODOはまだありません。</div>';
   } catch (error) {
-    show(`一覧取得に失敗しました（${error.message}）`, true);
+    list.replaceChildren();
+    show(
+      error.status === 401
+        ? 'TODOを使うにはパスキーでログインしてください。'
+        : `一覧取得に失敗しました（${error.message}）`,
+      true
+    );
   }
 }
 document.querySelector('#search-form').addEventListener('submit', async (event) => {

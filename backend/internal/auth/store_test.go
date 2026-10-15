@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"testing"
 	"time"
@@ -38,6 +40,14 @@ func (f *fakeChallengeRedis) GetDel(_ context.Context, key string) *redis.String
 		return redis.NewStringResult("", redis.Nil)
 	}
 	return redis.NewStringResult(v, nil)
+}
+
+func (f *fakeChallengeRedis) Get(_ context.Context, key string) *redis.StringCmd {
+	value, found := f.values[key]
+	if !found {
+		return redis.NewStringResult("", redis.Nil)
+	}
+	return redis.NewStringResult(value, nil)
 }
 
 func TestLoginStores(t *testing.T) {
@@ -77,6 +87,28 @@ func TestLoginStores(t *testing.T) {
 	}
 	if err := sessions.Save(ctx, hash, userID); err == nil {
 		t.Fatal("duplicate session accepted")
+	}
+	raw := [32]byte{9, 8, 7}
+	sessionHash := sha256.Sum256(raw[:])
+	token := base64.RawURLEncoding.EncodeToString(raw[:])
+	if err := sessions.Save(ctx, sessionHash, userID); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := sessions.Load(ctx, token); err != nil || got != userID {
+		t.Fatalf("load: id=%v err=%v", got, err)
+	}
+	for _, invalid := range []string{"", "!", "YQ"} {
+		if _, err := sessions.Load(ctx, invalid); !errors.Is(err, ErrSessionNotFound) {
+			t.Fatalf("invalid token %q: %v", invalid, err)
+		}
+	}
+	delete(client.values, sessionKey(sessionHash))
+	if _, err := sessions.Load(ctx, token); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("missing session: %v", err)
+	}
+	client.values[sessionKey(sessionHash)] = "bad"
+	if _, err := sessions.Load(ctx, token); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("corrupt session: %v", err)
 	}
 }
 
@@ -119,5 +151,15 @@ func TestLoginStoresIntegration(t *testing.T) {
 	}
 	if ttl := client.TTL(ctx, sessionKey(sessionHash)).Val(); ttl <= 0 || ttl > sessionLifetime {
 		t.Fatalf("session TTL: %v", ttl)
+	}
+	raw := [32]byte{6, 5, 4}
+	lookupHash := sha256.Sum256(raw[:])
+	lookupToken := base64.RawURLEncoding.EncodeToString(raw[:])
+	t.Cleanup(func() { _ = client.Del(ctx, sessionKey(lookupHash)).Err() })
+	if err := sessionStore.Save(ctx, lookupHash, id); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := sessionStore.Load(ctx, lookupToken); err != nil || got != id {
+		t.Fatalf("load: id=%v err=%v", got, err)
 	}
 }

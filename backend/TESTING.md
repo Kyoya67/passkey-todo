@@ -14,7 +14,7 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 `challenge.go`では、次の観点をテストしている。実RedisへのSessionData保存・復元、TTLによる期限切れ、登録IDの再使用拒否、8並列での消費成功が1回だけになること、破損データとRedis障害を確認する。HTTP→Service→実ライブラリ→Redis→実DBの登録成功・再送拒否も統合テストで確認する。端末の実パスキーを使うブラウザE2Eは未実施。
 
-`handler.go`と`service.go`では、単一のHandler・Serviceによる登録とログインをテストする。discoverable credentialでのログイン開始、ログインIDの使い捨て、ユーザーハンド照合、合成署名を使った実WebAuthn検証、失敗時のCookie非発行、Origin制限、Cookie属性を確認する。テストケースも`handler_test.go`と`service_test.go`にまとめている。`store.go`は`store_test.go`でFake Redisと実RedisによるTTL、キーの消費、セッション保存を確認する。`repository.go`ではCredentialの検索・更新もテストする。ログイン全体の実DB統合テストと端末の実パスキーによるブラウザ確認は未実施。
+`handler.go`と`service.go`では、単一のHandler・Serviceによる登録とログインをテストする。discoverable credentialでのログイン開始、ログインIDの使い捨て、ユーザーハンド照合、合成署名を使った実WebAuthn検証、失敗時のCookie非発行、Origin制限、Cookie属性を確認する。テストケースも`handler_test.go`と`service_test.go`にまとめている。`store.go`は`store_test.go`でFake Redisと実RedisによるTTL、キーの消費、セッション保存・読取、無効・欠損・破損セッションの拒否を確認する。`repository.go`ではCredentialの検索・更新もテストする。ログイン全体の実DB統合テストは未実施。
 
 ログイン失敗時はHandlerが入力解析とService検証の段階を固定ラベルで記録すること、Serviceが拒否理由を機密値なしで分類すること、クライアントやログに内部エラーとセッショントークンが出ないことを確認する。
 
@@ -58,15 +58,25 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 |  | NewSessionStore | 100.0% |
 |  | sessionKey | 100.0% |
 |  | Save | 83.3% |
+|  | Load | 92.9% |
 | repository.go | FindCredential | 90.9% |
 |  | UpdateCredential | 77.8% |
-| **パッケージ合計（外部DB・Redisテスト除く）** |  | **79.2%** |
+| **パッケージ合計（外部DB・Redisテスト除く）** |  | **79.9%** |
 
 今回の計測は`go test ./internal/auth -coverprofile=/private/tmp/kyoya-auth-unified-coverage.out -count=1`と`go tool cover -func=/private/tmp/kyoya-auth-unified-coverage.out`で行った。専用テストDBとRedisの接続先は指定せず、外部I/Oを伴う統合テストはスキップした。Redis統合テストも試したが、実行環境からローカルRedisへのTCP接続が許可されず失敗したため、この計測値には含めない。前回の88.3%はRedisテスト込みの値であり比較条件が異なる。`WebAuthnCredentials`は新規ユーザーの空Credential一覧を返すインターフェース実装で、登録経路では呼ばれない。
 
 ## internal/middleware
 
 `cors_test.go`では、許可OriginへのCookie付きリクエストのCORSヘッダーを確認する。`cors.go`の`CORS`は単体テストで100.0%。
+
+`auth_test.go`では、TODO一覧・作成・更新・削除の未ログイン拒否、正しいセッションの通過、期限切れ・不正セッションの拒否、Redis障害時の503、公開ルートとCORSプリフライトの通過を確認する。ユーザーIDをリクエストコンテキストへ渡すことも確認するが、TODOのユーザー別認可は未実装。
+
+| ファイル | 関数 | カバレッジ |
+|---|---|---:|
+| auth.go | UserID | 100.0% |
+|  | RequireTodoSession | 100.0% |
+| cors.go | CORS | 100.0% |
+| **パッケージ合計** |  | **100.0%** |
 
 ## internal/config
 

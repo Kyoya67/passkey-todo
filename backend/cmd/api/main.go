@@ -37,9 +37,6 @@ func main() {
 	todoService := todo.NewService(todoRepository)
 	todoHandler := todo.NewHandler(todoService)
 
-	e := echo.New()
-	e.Use(middleware.CORS(cfg.CORSAllowedOrigins))
-
 	redisOptions := &redis.Options{Addr: cfg.RedisAddress}
 	if cfg.RedisTLS {
 		redisOptions.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
@@ -60,9 +57,13 @@ func main() {
 	challengeStore := auth.NewChallengeStore(redisClient)
 	loginStore := auth.NewLoginStore(redisClient)
 	sessionStore := auth.NewSessionStore(redisClient)
+
 	authService := auth.NewService(verifier, authRepository, challengeStore, auth.WithLogin(verifier, authRepository, loginStore, sessionStore))
 	authHandler := auth.NewHandler(authService, authService, cfg.WebAuthnOrigin)
-	router.Register(e, todoHandler, authHandler)
 
+	e := echo.New()
+	e.Use(middleware.CORS(cfg.CORSAllowedOrigins))
+	e.Use(middleware.RequireTodoSession(sessionStore))
+	router.Register(e, todoHandler, authHandler)
 	e.Logger.Fatal(e.Start(":" + cfg.AppPort))
 }

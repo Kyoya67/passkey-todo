@@ -12,7 +12,7 @@ servers:
 
 tags:
   - name: auth
-    description: パスキー登録（ログインセッション発行は後続対応）
+    description: パスキー登録とログイン
   - name: todos
     description: TODO管理
   - name: health
@@ -125,6 +125,8 @@ paths:
     post:
       tags:
         - todos
+      security:
+        - todoSession: []
       summary: TODOを作成
       operationId: createTodo
       requestBody:
@@ -138,12 +140,16 @@ paths:
           description: TODOを作成した
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
     get:
       tags:
         - todos
+      security:
+        - todoSession: []
       summary: TODO一覧を取得
       operationId: listTodos
       parameters:
@@ -159,6 +165,8 @@ paths:
                 $ref: '#/components/schemas/TodoListResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
@@ -166,6 +174,8 @@ paths:
     put:
       tags:
         - todos
+      security:
+        - todoSession: []
       summary: TODOのタイトルを更新
       operationId: updateTodo
       parameters:
@@ -183,12 +193,16 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
     delete:
       tags:
         - todos
+      security:
+        - todoSession: []
       summary: TODOを削除
       operationId: deleteTodo
       parameters:
@@ -200,10 +214,18 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
 components:
+  securitySchemes:
+    todoSession:
+      type: apiKey
+      in: cookie
+      name: todo_session
+
   parameters:
     TodoID:
       name: id
@@ -432,6 +454,8 @@ components:
   responses:
     BadRequest:
       description: リクエストが不正
+    Unauthorized:
+      description: 有効なログインセッションがない
     NotFound:
       description: 指定されたTODOが存在しない
     ServiceUnavailable:
