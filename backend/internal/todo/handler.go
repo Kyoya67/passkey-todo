@@ -13,9 +13,9 @@ import (
 )
 
 type todoService interface {
-	Create(context.Context, [16]byte, string, string) (sqlc.Todo, error)
+	Create(context.Context, [16]byte, string, string, string) (sqlc.Todo, error)
 	List(context.Context, [16]byte, string, int32, int32) ([]sqlc.Todo, error)
-	Update(context.Context, [16]byte, int64, string, string) (sqlc.Todo, error)
+	Update(context.Context, [16]byte, int64, string, string, string) (sqlc.Todo, error)
 	Delete(context.Context, [16]byte, int64) error
 	Move(context.Context, [16]byte, int64, *int64) error
 }
@@ -49,9 +49,9 @@ func (h *Handler) CreateTodo(c echo.Context) error {
 	if request.Status != nil && *request.Status == "" {
 		return c.NoContent(http.StatusBadRequest)
 	}
-	_, err := h.service.Create(c.Request().Context(), userID, request.Title, requestStatus(request.Status))
+	_, err := h.service.Create(c.Request().Context(), userID, request.Title, requestStatus(request.Status), requestPriorityLevel(request.PriorityLevel))
 	if err != nil {
-		if errors.Is(err, ErrInvalidTitle) || errors.Is(err, ErrInvalidStatus) {
+		if errors.Is(err, ErrInvalidTitle) || errors.Is(err, ErrInvalidStatus) || errors.Is(err, ErrInvalidPriorityLevel) {
 			return c.NoContent(http.StatusBadRequest)
 		}
 		return serviceUnavailable(c, "create")
@@ -101,8 +101,8 @@ func (h *Handler) UpdateTodo(c echo.Context, id openapi.TodoID) error {
 	if request.Status != nil && *request.Status == "" {
 		return c.NoContent(http.StatusBadRequest)
 	}
-	_, err := h.service.Update(c.Request().Context(), userID, id, request.Title, requestStatus(request.Status))
-	if errors.Is(err, ErrInvalidTitle) || errors.Is(err, ErrInvalidStatus) {
+	_, err := h.service.Update(c.Request().Context(), userID, id, request.Title, requestStatus(request.Status), requestPriorityLevel(request.PriorityLevel))
+	if errors.Is(err, ErrInvalidTitle) || errors.Is(err, ErrInvalidStatus) || errors.Is(err, ErrInvalidPriorityLevel) {
 		return c.NoContent(http.StatusBadRequest)
 	}
 	if errors.Is(err, ErrNotFound) {
@@ -150,7 +150,14 @@ func (h *Handler) DeleteTodo(c echo.Context, id openapi.TodoID) error {
 }
 
 func toTodo(todo sqlc.Todo) openapi.Todo {
-	return openapi.Todo{Id: todo.ID, Title: todo.Title, Status: openapi.TodoStatus(todo.Status), Priority: todo.Priority, CreatedAt: todo.CreatedAt.Time, UpdatedAt: todo.UpdatedAt.Time}
+	return openapi.Todo{Id: todo.ID, Title: todo.Title, Status: openapi.TodoStatus(todo.Status), Priority: todo.Priority, PriorityLevel: openapi.TodoPriorityLevel(todo.PriorityLevel), CreatedAt: todo.CreatedAt.Time, UpdatedAt: todo.UpdatedAt.Time}
+}
+
+func requestPriorityLevel(level *openapi.TodoPriorityLevel) string {
+	if level == nil {
+		return ""
+	}
+	return string(*level)
 }
 
 func requestStatus(status *openapi.TodoStatus) string {

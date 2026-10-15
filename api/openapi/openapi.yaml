@@ -247,8 +247,8 @@ paths:
         - todos
       security:
         - todoSession: []
-      summary: TODOを同じ状態の列内で並べ替える
-      description: 未着手・進行中のTODOのみ並べ替えられる。beforeIdを指定するとそのTODOの直前へ、省略またはnullの場合は列末尾へ移動する。完了したTODOや別の状態のTODOは指定できない
+      summary: TODOを同じ状態・優先度のグループ内で並べ替える
+      description: 未着手・進行中のTODOのみ並べ替えられる。beforeIdを指定するとそのTODOの直前へ、省略またはnullの場合はグループ末尾へ移動する。完了したTODOや別の状態・優先度のTODOは指定できない
       operationId: moveTodo
       parameters:
         - $ref: '#/components/parameters/TodoID'
@@ -471,6 +471,8 @@ components:
           example: 買い物をする
         status:
           $ref: '#/components/schemas/TodoStatus'
+        priorityLevel:
+          $ref: '#/components/schemas/TodoPriorityLevel'
 
     MoveTodoRequest:
       type: object
@@ -480,12 +482,17 @@ components:
           format: int64
           nullable: true
           minimum: 1
-          description: 移動先の直後にあるTODOのID。省略時は列末尾へ移動する
+          description: 移動先の直後にある同じ状態・優先度グループのTODOのID。省略時はグループ末尾へ移動する
 
     TodoStatus:
       type: string
       description: 未着手・進行中・完了。省略時は未着手
       enum: [not_started, in_progress, completed]
+
+    TodoPriorityLevel:
+      type: string
+      description: 未着手・進行中で使用する優先度（high=高、medium=中、low=小）。省略時は中。完了列では順位付けに使用しない
+      enum: [high, medium, low]
 
     Todo:
       type: object
@@ -494,6 +501,7 @@ components:
         - title
         - status
         - priority
+        - priorityLevel
         - createdAt
         - updatedAt
       properties:
@@ -509,7 +517,9 @@ components:
         priority:
           type: integer
           format: int64
-      description: 未着手・進行中の列内の表示順。小さいほど上。完了では使用しない
+          description: 同じ状態・優先度グループ内の順位。小さいほど上。完了では使用しない
+        priorityLevel:
+          $ref: '#/components/schemas/TodoPriorityLevel'
         createdAt:
           type: string
           format: date-time

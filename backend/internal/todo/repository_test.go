@@ -38,7 +38,7 @@ func TestRepository(t *testing.T) {
 	wantOwner := pgtype.UUID{Bytes: testUserID, Valid: true}
 	queries := &fakeTodoQueries{
 		createFn: func(_ context.Context, params sqlc.CreateTodoParams) (sqlc.Todo, error) {
-			if params.OwnerID != wantOwner || params.Status != StatusNotStarted {
+			if params.OwnerID != wantOwner || params.Status != StatusNotStarted || params.PriorityLevel != PriorityHigh {
 				t.Fatalf("create owner=%+v", params.OwnerID)
 			}
 			return sqlc.Todo{Title: params.Title}, nil
@@ -50,7 +50,7 @@ func TestRepository(t *testing.T) {
 			return []sqlc.Todo{{Title: params.Title}}, nil
 		},
 		updateFn: func(_ context.Context, params sqlc.UpdateTodoParams) (sqlc.Todo, error) {
-			if params.OwnerID != wantOwner || params.Status != StatusCompleted {
+			if params.OwnerID != wantOwner || params.Status != StatusCompleted || params.PriorityLevel != PriorityLow {
 				t.Fatalf("update owner=%+v", params.OwnerID)
 			}
 			return sqlc.Todo{ID: params.TodoID, Title: params.Title}, nil
@@ -64,7 +64,7 @@ func TestRepository(t *testing.T) {
 	}
 	repository := NewRepository(queries, nil)
 
-	created, err := repository.Create(context.Background(), testUserID, "create", StatusNotStarted)
+	created, err := repository.Create(context.Background(), testUserID, "create", StatusNotStarted, PriorityHigh)
 	if err != nil || created.Title != "create" {
 		t.Fatalf("created=%+v err=%v", created, err)
 	}
@@ -72,7 +72,7 @@ func TestRepository(t *testing.T) {
 	if err != nil || len(listed) != 1 || listed[0].Title != "list" {
 		t.Fatalf("listed=%+v err=%v", listed, err)
 	}
-	updated, err := repository.Update(context.Background(), testUserID, 2, "update", StatusCompleted)
+	updated, err := repository.Update(context.Background(), testUserID, 2, "update", StatusCompleted, PriorityLow)
 	if err != nil || updated.ID != 2 || updated.Title != "update" {
 		t.Fatalf("updated=%+v err=%v", updated, err)
 	}
@@ -81,7 +81,7 @@ func TestRepository(t *testing.T) {
 	}
 
 	queries.createFn = func(context.Context, sqlc.CreateTodoParams) (sqlc.Todo, error) { return sqlc.Todo{}, wantErr }
-	if _, err := repository.Create(context.Background(), testUserID, "error", StatusNotStarted); !errors.Is(err, wantErr) {
+	if _, err := repository.Create(context.Background(), testUserID, "error", StatusNotStarted, PriorityHigh); !errors.Is(err, wantErr) {
 		t.Fatalf("create err=%v", err)
 	}
 }

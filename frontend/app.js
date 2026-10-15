@@ -7,6 +7,34 @@ const todoApp = document.querySelector('#todo-app');
 const authStatus = document.querySelector('#auth-status');
 const passkeyButton = document.querySelector('#register-passkey');
 const loginButton = document.querySelector('#login-passkey');
+const themeToggles = document.querySelectorAll('[data-theme-toggle]');
+let theme = 'light';
+try {
+  theme =
+    window.localStorage?.getItem('todo-theme') ||
+    (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+} catch {
+  /* Storage may be disabled. */
+}
+const setTheme = (nextTheme) => {
+  theme = nextTheme;
+  document.documentElement.dataset.theme = theme;
+  for (const toggle of themeToggles) {
+    const label = theme === 'dark' ? 'ライトモードに切り替える' : 'ダークモードに切り替える';
+    toggle.setAttribute('aria-label', label);
+    toggle.setAttribute('title', label);
+    toggle.setAttribute('aria-pressed', String(theme === 'dark'));
+  }
+  try {
+    window.localStorage?.setItem('todo-theme', theme);
+  } catch {
+    /* Storage may be disabled. */
+  }
+};
+setTheme(theme);
+for (const toggle of themeToggles) {
+  toggle.addEventListener('click', () => setTheme(theme === 'dark' ? 'light' : 'dark'));
+}
 const defaultAPIURL = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
   ? 'http://localhost:8080'
   : 'https://api.ca-techlounge-todo.kyo8.dev';
@@ -30,11 +58,11 @@ const request = async (path, options = {}) => {
 };
 const show = (text, error = false) => {
   message.textContent = text;
-  message.style.color = error ? '#c34e4e' : '#16816d';
+  message.style.color = error ? 'var(--status-error)' : 'var(--status-success)';
 };
 const showAuthStatus = (text, error = false) => {
   authStatus.textContent = text;
-  authStatus.style.color = error ? '#c34e4e' : '#16816d';
+  authStatus.style.color = error ? 'var(--status-error)' : 'var(--status-success)';
 };
 const showAuth = (text = '') => {
   todoApp.hidden = true;
@@ -189,15 +217,39 @@ const columns = [
   { status: 'in_progress', label: '進行中' },
   { status: 'completed', label: '完了' },
 ];
+const priorityLevels = [
+  { value: 'high', label: '高' },
+  { value: 'medium', label: '中' },
+  { value: 'low', label: '小' },
+];
+const priorityLevel = (todo) => todo.priorityLevel || 'medium';
+const sortByPriority = (a, b) => (a.priority ?? 0) - (b.priority ?? 0) || a.id - b.id;
 let currentTodos = new Map();
 let draggedTodoID = null;
+let dragPlacement = null;
 let statusBusy = false;
 let touchDrag = null;
 
-const renderCard = (todo) => `
+const animateLayout = (previousPositions) => {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  for (const card of list.querySelectorAll('.todo')) {
+    const previous = previousPositions.get(card.dataset.id);
+    if (!previous || !card.animate) continue;
+    const current = card.getBoundingClientRect();
+    const x = previous.left - current.left;
+    const y = previous.top - current.top;
+    if (Math.abs(x) < 1 && Math.abs(y) < 1) continue;
+    card.animate(
+      [{ transform: `translate(${x}px, ${y}px)` }, { transform: 'translate(0, 0)' }],
+      { duration: 260, easing: 'cubic-bezier(0.2, 0.75, 0.25, 1)' }
+    );
+  }
+};
+
+const renderCard = (todo, rank = null) => `
   <article class="todo" data-id="${escapeHTML(todo.id)}" draggable="true">
     <div class="todo-details">
-      <p class="todo-title">${escapeHTML(todo.title)}</p>
+      <div class="todo-title-row">${rank === null ? '' : `<span class="todo-rank" aria-label="グループ内順位 ${rank}">${rank}</span>`}<p class="todo-title">${escapeHTML(todo.title)}</p></div>
       <p class="todo-meta">更新：${new Date(todo.updatedAt).toLocaleString('ja-JP')}</p>
     </div>
     <div class="todo-actions">
@@ -207,48 +259,101 @@ const renderCard = (todo) => `
   </article>`;
 
 const renderBoard = (todos) => {
+  const previousPositions = new Map(
+    [...list.querySelectorAll('.todo')].map((card) => [card.dataset.id, card.getBoundingClientRect()])
+  );
   currentTodos = new Map(todos.map((todo) => [String(todo.id), todo]));
   list.innerHTML = columns
     .map(({ status, label }) => {
-      const cards = todos
-        .filter((todo) => todo.status === status)
-        .sort((a, b) =>
-          status === 'completed'
-            ? new Date(b.updatedAt) - new Date(a.updatedAt) || b.id - a.id
-            : (a.priority ?? 0) - (b.priority ?? 0) || a.id - b.id
-        );
+      const cards = todos.filter((todo) => todo.status === status);
+      const contents =
+        status === 'completed'
+          ? `<div class="column-cards">${cards
+              .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt) || b.id - a.id)
+              .map((todo) => renderCard(todo))
+              .join('')}</div>`
+          : priorityLevels
+              .map(({ value, label }) => {
+                const groupCards = cards
+                  .filter((todo) => priorityLevel(todo) === value)
+                  .sort(sortByPriority);
+                return `<section class="priority-group" data-level="${value}" aria-label="優先度 ${label}"><div class="priority-group-heading"><span class="priority-dot priority-${value}"></span><h4>優先度：${label}</h4></div><div class="column-cards">${groupCards.map((todo, index) => renderCard(todo, index + 1)).join('')}</div></section>`;
+              })
+              .join('');
       return `<section class="kanban-column" data-status="${status}" aria-label="${label}">
         <div class="column-heading"><h3>${label}</h3><span class="column-count">${cards.length}</span></div>
-        <div class="column-cards">${cards.map(renderCard).join('')}</div>
+        ${contents}
       </section>`;
     })
     .join('');
+  animateLayout(previousPositions);
 };
 
 const clearDrag = () => {
   draggedTodoID = null;
+  dragPlacement = null;
+  list.style?.removeProperty('--sort-gap');
   list
-    .querySelectorAll('.is-drop-target, .is-dragging, .is-drop-before, .is-drop-after')
+    .querySelectorAll(
+      '.is-drop-target, .is-group-target, .is-dragging, .is-drop-before, .is-drop-after'
+    )
     .forEach((element) => {
-      element.classList.remove('is-drop-target', 'is-dragging', 'is-drop-before', 'is-drop-after');
+      element.classList.remove(
+        'is-drop-target',
+        'is-group-target',
+        'is-dragging',
+        'is-drop-before',
+        'is-drop-after'
+      );
     });
 };
 
 const highlightPosition = (target, id, clientY) => {
-  list.querySelectorAll('.is-drop-before, .is-drop-after').forEach((card) => {
-    card.classList.remove('is-drop-before', 'is-drop-after');
-  });
-  const card = target?.closest('.todo');
   const column = target?.closest('.kanban-column');
+  const todo = currentTodos.get(String(id));
+  const group = nearestPriorityGroup(column, target, clientY);
+  let card = null;
+  let after = false;
   if (
-    !card ||
-    column?.dataset.status === 'completed' ||
-    card.dataset.id === String(id) ||
-    column?.dataset.status !== currentTodos.get(String(id))?.status
-  )
-    return;
-  const rect = card.getBoundingClientRect();
-  card.classList.add(clientY < rect.top + rect.height / 2 ? 'is-drop-before' : 'is-drop-after');
+    todo &&
+    column?.dataset.status === todo.status &&
+    todo.status !== 'completed' &&
+    group?.dataset.level === priorityLevel(todo)
+  ) {
+    const cards = [...(group.querySelectorAll?.('.todo') || [])].filter(
+      (item) => item.dataset.id !== String(id)
+    );
+    if (cards.length) {
+      card = cards.find((item) => {
+        const rect = item.getBoundingClientRect();
+        return clientY < rect.top + rect.height / 2;
+      });
+      if (!card) {
+        card = cards.at(-1);
+        after = true;
+      }
+    } else {
+      const hovered = target?.closest('.todo');
+      if (hovered && hovered.dataset.id !== String(id)) {
+        card = hovered;
+        const rect = card.getBoundingClientRect();
+        after = clientY >= rect.top + rect.height / 2;
+      }
+    }
+  }
+  const placement = card
+    ? { sourceID: String(id), status: todo.status, level: priorityLevel(todo), targetID: card.dataset.id, after }
+    : null;
+  if (
+    dragPlacement?.targetID === placement?.targetID &&
+    dragPlacement?.after === placement?.after &&
+    dragPlacement?.sourceID === placement?.sourceID
+  ) return;
+  list.querySelectorAll('.is-drop-before, .is-drop-after').forEach((item) => {
+    item.classList.remove('is-drop-before', 'is-drop-after');
+  });
+  dragPlacement = placement;
+  if (card) card.classList.add(after ? 'is-drop-after' : 'is-drop-before');
 };
 
 const highlightColumn = (column) => {
@@ -256,6 +361,32 @@ const highlightColumn = (column) => {
     if (target !== column) target.classList.remove('is-drop-target');
   });
   column?.classList.add('is-drop-target');
+};
+
+const highlightGroup = (group) => {
+  list.querySelectorAll('.is-group-target').forEach((target) => {
+    if (target !== group) target.classList.remove('is-group-target');
+  });
+  group?.classList.add('is-group-target');
+};
+
+const nearestPriorityGroup = (column, target, clientY) => {
+  if (!column || column.dataset.status === 'completed') return null;
+  const hovered = target?.closest('.priority-group');
+  if (hovered) return hovered;
+  if (!Number.isFinite(clientY)) return null;
+  const groups = column.querySelectorAll?.('.priority-group') || [];
+  let nearest = null;
+  let shortestDistance = Infinity;
+  for (const group of groups) {
+    const { top, bottom } = group.getBoundingClientRect();
+    const distance = Math.max(top - clientY, clientY - bottom, 0);
+    if (distance < shortestDistance) {
+      nearest = group;
+      shortestDistance = distance;
+    }
+  }
+  return nearest;
 };
 
 const clearTouchDrag = () => {
@@ -267,29 +398,49 @@ const clearTouchDrag = () => {
     touchDrag.card.releasePointerCapture(touchDrag.pointerId);
   }
   highlightColumn(null);
+  highlightGroup(null);
+  dragPlacement = null;
+  list.style?.removeProperty('--sort-gap');
   list.querySelectorAll('.is-drop-before, .is-drop-after').forEach((card) => {
     card.classList.remove('is-drop-before', 'is-drop-after');
   });
   touchDrag = null;
 };
 
-const updateStatus = async (id, status) => {
+const updateStatus = async (id, status, level = null) => {
   const todo = currentTodos.get(String(id));
-  if (!todo || todo.status === status || statusBusy) return;
+  if (!todo || statusBusy) return;
+  const nextLevel = level || priorityLevel(todo);
+  if (todo.status === status && priorityLevel(todo) === nextLevel) return;
+  const previousTodos = [...currentTodos.values()];
+  const nextPriority =
+    Math.max(
+      0,
+      ...previousTodos
+        .filter((item) => item.status === status && priorityLevel(item) === nextLevel)
+        .map((item) => item.priority || 0)
+    ) + 1;
   statusBusy = true;
   list.setAttribute('aria-busy', 'true');
+  renderBoard(
+    previousTodos.map((item) =>
+      String(item.id) === String(id)
+        ? { ...item, status, priorityLevel: nextLevel, priority: nextPriority }
+        : item
+    )
+  );
   try {
     await request(`/todos/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ title: todo.title, status }),
+      body: JSON.stringify({ title: todo.title, status, priorityLevel: nextLevel }),
     });
-    if (await load()) show('状態を更新しました');
+    if (await load()) show('');
   } catch (error) {
     if (error.status === 401) {
       showAuth('セッションが切れました。パスキーでログインしてください。');
     } else {
-      show(`状態の更新に失敗しました（${error.message}）`, true);
-      renderBoard([...currentTodos.values()]);
+      show(`更新に失敗しました（${error.message}）`, true);
+      renderBoard(previousTodos);
     }
   } finally {
     statusBusy = false;
@@ -299,38 +450,63 @@ const updateStatus = async (id, status) => {
 const movePriority = async (id, targetID, after = false) => {
   const todo = currentTodos.get(String(id));
   if (!todo || todo.status === 'completed' || statusBusy) return;
-  const ids = [...currentTodos.values()]
-    .filter((item) => item.status === todo.status)
-    .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0) || a.id - b.id)
-    .map((item) => String(item.id))
-    .filter((itemID) => itemID !== String(id));
+  const previousTodos = [...currentTodos.values()];
+  const originalOrder = previousTodos
+    .filter((item) => item.status === todo.status && priorityLevel(item) === priorityLevel(todo))
+    .sort(sortByPriority)
+    .map((item) => String(item.id));
+  const ids = originalOrder.filter((itemID) => itemID !== String(id));
   let index = targetID ? ids.indexOf(String(targetID)) : ids.length;
   if (index < 0) return;
   if (after && targetID) index++;
   const beforeId = ids[index] ? Number(ids[index]) : null;
   if (targetID === String(id)) return;
+  const nextOrder = [...ids.slice(0, index), String(id), ...ids.slice(index)];
+  if (nextOrder.every((itemID, position) => itemID === originalOrder[position])) return;
+  const ranks = new Map(nextOrder.map((itemID, position) => [itemID, position + 1]));
   statusBusy = true;
   list.setAttribute('aria-busy', 'true');
+  renderBoard(
+    previousTodos.map((item) =>
+      ranks.has(String(item.id)) ? { ...item, priority: ranks.get(String(item.id)) } : item
+    )
+  );
   try {
     await request(`/todos/${id}/position`, {
       method: 'PUT',
       body: JSON.stringify({ beforeId }),
     });
-    if (await load()) show('優先順位を更新しました');
+    if (await load()) show('');
   } catch (error) {
     if (error.status === 401) showAuth('セッションが切れました。パスキーでログインしてください。');
-    else show(`優先順位の更新に失敗しました（${error.message}）`, true);
+    else {
+      show(`優先順位の更新に失敗しました（${error.message}）`, true);
+      renderBoard(previousTodos);
+    }
   } finally {
     statusBusy = false;
     list.removeAttribute('aria-busy');
   }
 };
-const dropTodo = async (id, column, target, clientY) => {
+const dropTodo = async (id, column, target, clientY, placement = null) => {
   if (!column) return;
   const todo = currentTodos.get(String(id));
   if (!todo) return;
-  if (todo.status !== column.dataset.status) return updateStatus(id, column.dataset.status);
+  const level = nearestPriorityGroup(column, target, clientY)?.dataset.level || priorityLevel(todo);
+  if (
+    todo.status !== column.dataset.status ||
+    (column.dataset.status !== 'completed' && level !== priorityLevel(todo))
+  ) {
+    return updateStatus(id, column.dataset.status, level);
+  }
   if (todo.status === 'completed') return;
+  if (
+    placement?.sourceID === String(id) &&
+    placement.status === todo.status &&
+    placement.level === level
+  ) {
+    return movePriority(id, placement.targetID, placement.after);
+  }
   const card = target?.closest('.todo');
   const targetID = card?.dataset.id;
   const midpoint = card?.getBoundingClientRect
@@ -371,8 +547,7 @@ document.querySelector('#todo-form').addEventListener('submit', async (event) =>
       body: JSON.stringify({ title: input.value.trim() }),
     });
     input.value = '';
-    show('TODOを追加しました');
-    await load();
+    if (await load()) show('');
   } catch (error) {
     if (error.status === 401)
       return showAuth('セッションが切れました。パスキーでログインしてください。');
@@ -386,6 +561,10 @@ list.addEventListener('dragstart', (event) => {
     return;
   }
   draggedTodoID = item.dataset.id;
+  dragPlacement = null;
+  if (item.getBoundingClientRect) {
+    list.style?.setProperty('--sort-gap', `${item.getBoundingClientRect().height}px`);
+  }
   event.dataTransfer.effectAllowed = 'move';
   event.dataTransfer.setData('text/plain', draggedTodoID);
   item.classList.add('is-dragging');
@@ -393,7 +572,10 @@ list.addEventListener('dragstart', (event) => {
 list.addEventListener('dragover', (event) => {
   const column = event.target.closest('.kanban-column');
   if (!column || !draggedTodoID || statusBusy) return;
-  if (column.dataset.status === 'completed' && currentTodos.get(draggedTodoID)?.status === 'completed') {
+  if (
+    column.dataset.status === 'completed' &&
+    currentTodos.get(draggedTodoID)?.status === 'completed'
+  ) {
     highlightColumn(null);
     highlightPosition(null, draggedTodoID, event.clientY);
     return;
@@ -401,6 +583,7 @@ list.addEventListener('dragover', (event) => {
   event.preventDefault();
   event.dataTransfer.dropEffect = 'move';
   highlightColumn(column);
+  highlightGroup(nearestPriorityGroup(column, event.target, event.clientY));
   highlightPosition(event.target, draggedTodoID, event.clientY);
 });
 list.addEventListener('drop', async (event) => {
@@ -408,8 +591,9 @@ list.addEventListener('drop', async (event) => {
   if (!column || !draggedTodoID) return;
   event.preventDefault();
   const id = draggedTodoID;
+  const placement = dragPlacement;
   clearDrag();
-  await dropTodo(id, column, event.target, event.clientY);
+  await dropTodo(id, column, event.target, event.clientY, placement);
 });
 list.addEventListener('dragend', clearDrag);
 list.addEventListener('dragleave', (event) => {
@@ -434,6 +618,8 @@ list.addEventListener('pointerdown', (event) => {
   touchDrag.timer = setTimeout(() => {
     if (!touchDrag || touchDrag.pointerId !== event.pointerId) return;
     touchDrag.active = true;
+    dragPlacement = null;
+    list.style?.setProperty('--sort-gap', `${card.getBoundingClientRect().height}px`);
     card.classList.add('is-dragging');
     const ghost = card.cloneNode(true);
     ghost.classList.add('touch-drag-preview');
@@ -459,17 +645,21 @@ window.addEventListener('pointermove', (event) => {
   touchDrag.ghost.style.top = `${event.clientY}px`;
   const target = document.elementFromPoint(event.clientX, event.clientY);
   const column = target?.closest('.kanban-column');
-  const sameCompleted = column?.dataset.status === 'completed' && currentTodos.get(touchDrag.id)?.status === 'completed';
+  const sameCompleted =
+    column?.dataset.status === 'completed' &&
+    currentTodos.get(touchDrag.id)?.status === 'completed';
   highlightColumn(sameCompleted ? null : column);
+  highlightGroup(sameCompleted ? null : nearestPriorityGroup(column, target, event.clientY));
   highlightPosition(target, touchDrag.id, event.clientY);
 });
 window.addEventListener('pointerup', async (event) => {
   if (!touchDrag || event.pointerId !== touchDrag.pointerId) return;
   const { active, id } = touchDrag;
+  const placement = dragPlacement;
   const target = active ? document.elementFromPoint(event.clientX, event.clientY) : null;
   const column = target?.closest('.kanban-column');
   clearTouchDrag();
-  if (column) await dropTodo(id, column, target, event.clientY);
+  if (column) await dropTodo(id, column, target, event.clientY, placement);
 });
 window.addEventListener('pointercancel', (event) => {
   if (touchDrag?.pointerId === event.pointerId) clearTouchDrag();
@@ -482,8 +672,7 @@ list.addEventListener('click', async (event) => {
   try {
     if (event.target.classList.contains('delete')) {
       await request(`/todos/${id}`, { method: 'DELETE' });
-      show('TODOを削除しました');
-      await load();
+      if (await load()) show('');
     } else if (editButton) {
       const titleElement = item.querySelector('.todo-title');
       const editing = titleElement.querySelector('.todo-edit-input');
@@ -499,8 +688,7 @@ list.addEventListener('click', async (event) => {
       const title = editing.value.trim();
       if (!title) return;
       await request(`/todos/${id}`, { method: 'PUT', body: JSON.stringify({ title }) });
-      show('TODOを更新しました');
-      await load();
+      if (await load()) show('');
     }
   } catch (error) {
     if (error.status === 401)

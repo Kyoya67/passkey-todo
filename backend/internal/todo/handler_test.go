@@ -22,23 +22,23 @@ import (
 var testUserID = [16]byte{1}
 
 type fakeService struct {
-	createFn func(context.Context, [16]byte, string, string) (sqlc.Todo, error)
+	createFn func(context.Context, [16]byte, string, string, string) (sqlc.Todo, error)
 	listFn   func(context.Context, [16]byte, string, int32, int32) ([]sqlc.Todo, error)
-	updateFn func(context.Context, [16]byte, int64, string, string) (sqlc.Todo, error)
+	updateFn func(context.Context, [16]byte, int64, string, string, string) (sqlc.Todo, error)
 	deleteFn func(context.Context, [16]byte, int64) error
 	moveFn   func(context.Context, [16]byte, int64, *int64) error
 }
 
-func (f *fakeService) Create(ctx context.Context, userID [16]byte, title, status string) (sqlc.Todo, error) {
-	return f.createFn(ctx, userID, title, status)
+func (f *fakeService) Create(ctx context.Context, userID [16]byte, title, status, level string) (sqlc.Todo, error) {
+	return f.createFn(ctx, userID, title, status, level)
 }
 
 func (f *fakeService) List(ctx context.Context, userID [16]byte, title string, limit, offset int32) ([]sqlc.Todo, error) {
 	return f.listFn(ctx, userID, title, limit, offset)
 }
 
-func (f *fakeService) Update(ctx context.Context, userID [16]byte, id int64, title, status string) (sqlc.Todo, error) {
-	return f.updateFn(ctx, userID, id, title, status)
+func (f *fakeService) Update(ctx context.Context, userID [16]byte, id int64, title, status, level string) (sqlc.Todo, error) {
+	return f.updateFn(ctx, userID, id, title, status, level)
 }
 
 func (f *fakeService) Delete(ctx context.Context, userID [16]byte, id int64) error {
@@ -98,13 +98,16 @@ func TestHandlerRejectsMissingAuthenticatedUser(t *testing.T) {
 
 func TestHandlerCreate(t *testing.T) {
 	t.Run("passes status", func(t *testing.T) {
-		handler := NewHandler(&fakeService{createFn: func(_ context.Context, _ [16]byte, _, status string) (sqlc.Todo, error) {
+		handler := NewHandler(&fakeService{createFn: func(_ context.Context, _ [16]byte, _, status, level string) (sqlc.Todo, error) {
 			if status != StatusCompleted {
 				t.Fatalf("status=%q", status)
 			}
+			if level != PriorityHigh {
+				t.Fatalf("level=%q", level)
+			}
 			return sqlc.Todo{Status: status}, nil
 		}})
-		ctx, response := newHandlerContext(http.MethodPost, "/todos", `{"title":"todo","status":"completed"}`)
+		ctx, response := newHandlerContext(http.MethodPost, "/todos", `{"title":"todo","status":"completed","priorityLevel":"high"}`)
 		if err := handler.CreateTodo(ctx); err != nil || response.Code != http.StatusNoContent {
 			t.Fatalf("err=%v code=%d", err, response.Code)
 		}
@@ -120,7 +123,7 @@ func TestHandlerCreate(t *testing.T) {
 		}
 	})
 	t.Run("returns bad request for invalid JSON", func(t *testing.T) {
-		handler := NewHandler(&fakeService{createFn: func(context.Context, [16]byte, string, string) (sqlc.Todo, error) { return sqlc.Todo{}, nil }})
+		handler := NewHandler(&fakeService{createFn: func(context.Context, [16]byte, string, string, string) (sqlc.Todo, error) { return sqlc.Todo{}, nil }})
 		ctx, response := newHandlerContext(http.MethodPost, "/todos", "{")
 		if err := handler.CreateTodo(ctx); err != nil {
 			t.Fatal(err)
@@ -137,11 +140,12 @@ func TestHandlerCreate(t *testing.T) {
 	}{
 		{name: "invalid title", err: ErrInvalidTitle, want: http.StatusBadRequest},
 		{name: "invalid status", err: ErrInvalidStatus, want: http.StatusBadRequest},
+		{name: "invalid priority level", err: ErrInvalidPriorityLevel, want: http.StatusBadRequest},
 		{name: "service error", err: errors.New("failed"), want: http.StatusServiceUnavailable},
 		{name: "success", err: nil, want: http.StatusNoContent},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			handler := NewHandler(&fakeService{createFn: func(_ context.Context, userID [16]byte, title, status string) (sqlc.Todo, error) {
+			handler := NewHandler(&fakeService{createFn: func(_ context.Context, userID [16]byte, title, status, level string) (sqlc.Todo, error) {
 				if userID != testUserID || title != "todo" {
 					t.Fatalf("user=%v title=%q", userID, title)
 				}
@@ -164,7 +168,7 @@ func TestHandlerList(t *testing.T) {
 		if userID != testUserID || title != "search" || limit != 10 || offset != 2 {
 			t.Fatalf("user=%v title=%q limit=%d offset=%d", userID, title, limit, offset)
 		}
-		return []sqlc.Todo{{ID: 1, Title: "todo", Status: StatusInProgress, CreatedAt: pgtype.Timestamptz{Time: now, Valid: true}, UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true}}}, nil
+		return []sqlc.Todo{{ID: 1, Title: "todo", Status: StatusInProgress, PriorityLevel: PriorityMedium, CreatedAt: pgtype.Timestamptz{Time: now, Valid: true}, UpdatedAt: pgtype.Timestamptz{Time: now, Valid: true}}}, nil
 	}})
 	title, limit, offset := "search", int32(10), int32(2)
 	ctx, response := newHandlerContext(http.MethodGet, "/todos", "")
@@ -178,20 +182,23 @@ func TestHandlerList(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if len(body.Todos) != 1 || body.Todos[0].Id != 1 || body.Todos[0].Title != "todo" || body.Todos[0].Status != openapi.TodoStatus(StatusInProgress) || !body.Todos[0].UpdatedAt.Equal(now) {
+	if len(body.Todos) != 1 || body.Todos[0].Id != 1 || body.Todos[0].Title != "todo" || body.Todos[0].Status != openapi.TodoStatus(StatusInProgress) || body.Todos[0].PriorityLevel != openapi.TodoPriorityLevel(PriorityMedium) || !body.Todos[0].UpdatedAt.Equal(now) {
 		t.Fatalf("body=%+v", body)
 	}
 }
 
 func TestHandlerUpdateAndDelete(t *testing.T) {
 	t.Run("passes status", func(t *testing.T) {
-		handler := NewHandler(&fakeService{updateFn: func(_ context.Context, _ [16]byte, _ int64, _, status string) (sqlc.Todo, error) {
+		handler := NewHandler(&fakeService{updateFn: func(_ context.Context, _ [16]byte, _ int64, _, status, level string) (sqlc.Todo, error) {
 			if status != StatusInProgress {
 				t.Fatalf("status=%q", status)
 			}
+			if level != PriorityLow {
+				t.Fatalf("level=%q", level)
+			}
 			return sqlc.Todo{Status: status}, nil
 		}})
-		ctx, response := newHandlerContext(http.MethodPut, "/todos/1", `{"title":"todo","status":"in_progress"}`)
+		ctx, response := newHandlerContext(http.MethodPut, "/todos/1", `{"title":"todo","status":"in_progress","priorityLevel":"low"}`)
 		if err := handler.UpdateTodo(ctx, 1); err != nil || response.Code != http.StatusNoContent {
 			t.Fatalf("err=%v code=%d", err, response.Code)
 		}
@@ -206,12 +213,13 @@ func TestHandlerUpdateAndDelete(t *testing.T) {
 	}{
 		{name: "invalid title", err: ErrInvalidTitle, want: http.StatusBadRequest},
 		{name: "invalid status", err: ErrInvalidStatus, want: http.StatusBadRequest},
+		{name: "invalid priority level", err: ErrInvalidPriorityLevel, want: http.StatusBadRequest},
 		{name: "not found", err: ErrNotFound, want: http.StatusNotFound},
 		{name: "service error", err: errors.New("failed"), want: http.StatusServiceUnavailable},
 		{name: "success", err: nil, want: http.StatusNoContent},
 	} {
 		t.Run("update "+test.name, func(t *testing.T) {
-			handler := NewHandler(&fakeService{updateFn: func(_ context.Context, userID [16]byte, id int64, title, status string) (sqlc.Todo, error) {
+			handler := NewHandler(&fakeService{updateFn: func(_ context.Context, userID [16]byte, id int64, title, status, level string) (sqlc.Todo, error) {
 				if userID != testUserID || id != 1 || title != "updated" {
 					t.Fatalf("user=%v id=%d title=%q", userID, id, title)
 				}
@@ -226,7 +234,7 @@ func TestHandlerUpdateAndDelete(t *testing.T) {
 			}
 		})
 
-		if test.name == "invalid status" {
+		if test.name == "invalid status" || test.name == "invalid priority level" {
 			continue
 		}
 		t.Run("delete "+test.name, func(t *testing.T) {
@@ -281,11 +289,13 @@ func TestHandlerMove(t *testing.T) {
 func TestHandlerServiceFailureLogging(t *testing.T) {
 	privateErr := errors.New("private SQL detail")
 	service := &fakeService{
-		createFn: func(context.Context, [16]byte, string, string) (sqlc.Todo, error) { return sqlc.Todo{}, privateErr },
+		createFn: func(context.Context, [16]byte, string, string, string) (sqlc.Todo, error) {
+			return sqlc.Todo{}, privateErr
+		},
 		listFn: func(context.Context, [16]byte, string, int32, int32) ([]sqlc.Todo, error) {
 			return nil, privateErr
 		},
-		updateFn: func(context.Context, [16]byte, int64, string, string) (sqlc.Todo, error) {
+		updateFn: func(context.Context, [16]byte, int64, string, string, string) (sqlc.Todo, error) {
 			return sqlc.Todo{}, privateErr
 		},
 		deleteFn: func(context.Context, [16]byte, int64) error { return privateErr },

@@ -13,22 +13,30 @@ import (
 
 const createTodo = `-- name: CreateTodo :one
 INSERT INTO todos (
-    title, user_id, status, priority
+    title, user_id, status, priority_level, priority
 ) VALUES (
-    $1, $2::uuid, $3,
-    (SELECT COALESCE(MAX(priority), 0) + 1 FROM todos WHERE user_id = $2::uuid AND status = $3)
+    $1, $2::uuid, $3, $4,
+    (SELECT COALESCE(MAX(priority), 0) + 1 FROM todos
+     WHERE user_id = $2::uuid AND status = $3
+       AND priority_level = $4)
 )
-RETURNING id, title, created_at, updated_at, user_id, status, priority
+RETURNING id, title, created_at, updated_at, user_id, status, priority, priority_level
 `
 
 type CreateTodoParams struct {
-	Title   string      `json:"title"`
-	OwnerID pgtype.UUID `json:"owner_id"`
-	Status  string      `json:"status"`
+	Title         string      `json:"title"`
+	OwnerID       pgtype.UUID `json:"owner_id"`
+	Status        string      `json:"status"`
+	PriorityLevel string      `json:"priority_level"`
 }
 
 func (q *Queries) CreateTodo(ctx context.Context, arg CreateTodoParams) (Todo, error) {
-	row := q.db.QueryRow(ctx, createTodo, arg.Title, arg.OwnerID, arg.Status)
+	row := q.db.QueryRow(ctx, createTodo,
+		arg.Title,
+		arg.OwnerID,
+		arg.Status,
+		arg.PriorityLevel,
+	)
 	var i Todo
 	err := row.Scan(
 		&i.ID,
@@ -38,6 +46,7 @@ func (q *Queries) CreateTodo(ctx context.Context, arg CreateTodoParams) (Todo, e
 		&i.UserID,
 		&i.Status,
 		&i.Priority,
+		&i.PriorityLevel,
 	)
 	return i, err
 }
@@ -68,11 +77,14 @@ SELECT
     updated_at,
     user_id,
     status,
-    priority
+    priority,
+    priority_level
 FROM todos
 WHERE user_id = $1::uuid
   AND title ILIKE '%' || $2::text || '%'
 ORDER BY status,
+    CASE WHEN status <> 'completed' THEN CASE priority_level
+        WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END END ASC NULLS LAST,
     CASE WHEN status <> 'completed' THEN priority END ASC NULLS LAST,
     CASE WHEN status = 'completed' THEN updated_at END DESC NULLS LAST,
     id
@@ -109,6 +121,7 @@ func (q *Queries) ListTodos(ctx context.Context, arg ListTodosParams) ([]Todo, e
 			&i.UserID,
 			&i.Status,
 			&i.Priority,
+			&i.PriorityLevel,
 		); err != nil {
 			return nil, err
 		}
@@ -125,26 +138,32 @@ UPDATE todos AS target
 SET
     title = $1,
     priority = CASE WHEN target.status <> COALESCE(NULLIF($2::text, ''), target.status)
+            OR target.priority_level <> COALESCE(NULLIF($3::text, ''), target.priority_level)
         THEN (SELECT COALESCE(MAX(other.priority), 0) + 1 FROM todos AS other
-              WHERE other.user_id = $3::uuid AND other.status = $2::text)
+              WHERE other.user_id = $4::uuid
+                AND other.status = COALESCE(NULLIF($2::text, ''), target.status)
+                AND other.priority_level = COALESCE(NULLIF($3::text, ''), target.priority_level))
         ELSE target.priority END,
     status = COALESCE(NULLIF($2::text, ''), target.status),
+    priority_level = COALESCE(NULLIF($3::text, ''), target.priority_level),
     updated_at = NOW()
-WHERE target.id = $4 AND target.user_id = $3::uuid
-RETURNING target.id, target.title, target.created_at, target.updated_at, target.user_id, target.status, target.priority
+WHERE target.id = $5 AND target.user_id = $4::uuid
+RETURNING target.id, target.title, target.created_at, target.updated_at, target.user_id, target.status, target.priority, target.priority_level
 `
 
 type UpdateTodoParams struct {
-	Title   string      `json:"title"`
-	Status  string      `json:"status"`
-	OwnerID pgtype.UUID `json:"owner_id"`
-	TodoID  int64       `json:"todo_id"`
+	Title         string      `json:"title"`
+	Status        string      `json:"status"`
+	PriorityLevel string      `json:"priority_level"`
+	OwnerID       pgtype.UUID `json:"owner_id"`
+	TodoID        int64       `json:"todo_id"`
 }
 
 func (q *Queries) UpdateTodo(ctx context.Context, arg UpdateTodoParams) (Todo, error) {
 	row := q.db.QueryRow(ctx, updateTodo,
 		arg.Title,
 		arg.Status,
+		arg.PriorityLevel,
 		arg.OwnerID,
 		arg.TodoID,
 	)
@@ -157,6 +176,7 @@ func (q *Queries) UpdateTodo(ctx context.Context, arg UpdateTodoParams) (Todo, e
 		&i.UserID,
 		&i.Status,
 		&i.Priority,
+		&i.PriorityLevel,
 	)
 	return i, err
 }
