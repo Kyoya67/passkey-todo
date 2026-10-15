@@ -56,10 +56,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("configure WebAuthn: %v", err)
 	}
-	authRepository := auth.NewRepository(pool)
+	authRepository := auth.NewRepository(pool, queries)
 	challengeStore := auth.NewChallengeStore(redisClient)
-	authService := auth.NewService(verifier, authRepository, challengeStore)
-	authHandler := auth.NewHandler(authService, cfg.WebAuthnOrigin)
+	loginStore := auth.NewLoginStore(redisClient)
+	sessionStore := auth.NewSessionStore(redisClient)
+	authService := auth.NewService(verifier, authRepository, challengeStore, auth.WithLogin(verifier, authRepository, loginStore, sessionStore))
+	authHandler := auth.NewHandler(authService, authService, cfg.WebAuthnOrigin)
 	router.Register(e, todoHandler, authHandler)
 
 	e.Logger.Fatal(e.Start(":" + cfg.AppPort))

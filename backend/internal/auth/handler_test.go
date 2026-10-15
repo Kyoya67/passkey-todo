@@ -12,13 +12,12 @@ import (
 	"strings"
 	"testing"
 
+	sqlc "github.com/catechlounge/kyoya67-todo/backend/internal/database/sqlc"
+	"github.com/catechlounge/kyoya67-todo/backend/internal/openapi"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
-
-	sqlc "github.com/catechlounge/kyoya67-todo/backend/internal/database/sqlc"
-	"github.com/catechlounge/kyoya67-todo/backend/internal/openapi"
 )
 
 type fakeRegistrationService struct {
@@ -64,7 +63,7 @@ func TestRegistrationHandler(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			service := &fakeRegistrationService{err: tc.err}
-			h := NewHandler(service, "http://localhost:3000")
+			h := NewHandler(service, nil, "http://localhost:3000")
 			e := echo.New()
 			e.POST("/begin", h.BeginRegistration)
 			e.POST("/finish", h.FinishRegistration)
@@ -93,7 +92,7 @@ func TestRegistrationHandler(t *testing.T) {
 }
 
 func TestRegistrationDisabled(t *testing.T) {
-	h := NewHandler(nil, "")
+	h := NewHandler(nil, nil, "")
 	e := echo.New()
 	e.POST("/begin", h.BeginRegistration)
 	w := httptest.NewRecorder()
@@ -120,7 +119,7 @@ func TestRegistrationHTTPIntegration(t *testing.T) {
 	}
 	redisClient := redis.NewClient(&redis.Options{Addr: os.Getenv("REDIS_TEST_ADDR")})
 	defer redisClient.Close()
-	h := NewHandler(NewService(w, NewRepository(pool), NewChallengeStore(redisClient)), "http://localhost:3000")
+	h := NewHandler(NewService(w, NewRepository(pool, sqlc.New(pool)), NewChallengeStore(redisClient)), nil, "http://localhost:3000")
 	e := echo.New()
 	e.POST("/begin", h.BeginRegistration)
 	e.POST("/finish", h.FinishRegistration)
@@ -174,5 +173,127 @@ func TestRegistrationHTTPIntegration(t *testing.T) {
 	}
 	if res := call("/finish", string(body)); res.Code != 400 {
 		t.Fatalf("replay: %d", res.Code)
+	}
+}
+
+type fakeLoginServiceAPI struct {
+	finishCalls int
+	token       string
+	err         error
+}
+
+func (f *fakeLoginServiceAPI) BeginLogin(context.Context) (string, *protocol.CredentialAssertion, error) {
+	return "login-token", &protocol.CredentialAssertion{}, f.err
+}
+func (f *fakeLoginServiceAPI) FinishLogin(context.Context, string, *protocol.ParsedCredentialAssertionData) (string, error) {
+	f.finishCalls++
+	return f.token, f.err
+}
+
+func TestLoginHandlerBegin(t *testing.T) {
+	service := &fakeLoginServiceAPI{}
+	h := NewHandler(nil, service, "http://localhost:3000")
+	e := echo.New()
+	e.POST("/begin", h.BeginLogin)
+	for _, tc := range []struct {
+		origin string
+		status int
+	}{{"", 403}, {"https://evil.example", 403}, {"http://localhost:3000", 200}} {
+		r := httptest.NewRequest(http.MethodPost, "/begin", nil)
+		r.Header.Set(echo.HeaderOrigin, tc.origin)
+		res := httptest.NewRecorder()
+		e.ServeHTTP(res, r)
+		if res.Code != tc.status {
+			t.Fatalf("origin=%q status=%d", tc.origin, res.Code)
+		}
+		if tc.status == 200 && (res.Header().Get("Cache-Control") != "no-store" || !strings.Contains(res.Body.String(), "login-token")) {
+			t.Fatal("token response missing or cacheable")
+		}
+	}
+	service.err = errors.New("redis failed")
+	r := httptest.NewRequest(http.MethodPost, "/begin", nil)
+	r.Header.Set(echo.HeaderOrigin, "http://localhost:3000")
+	res := httptest.NewRecorder()
+	e.ServeHTTP(res, r)
+	if res.Code != 503 || strings.Contains(res.Body.String(), "redis failed") {
+		t.Fatalf("internal error leaked: %d", res.Code)
+	}
+}
+
+func TestLoginHandlerFinish(t *testing.T) {
+	data := make([]byte, 37)
+	data[32] = 0x05
+	credential := protocol.CredentialAssertionResponse{
+		PublicKeyCredential: protocol.PublicKeyCredential{Credential: protocol.Credential{ID: "Ag", Type: "public-key"}, RawID: []byte{2}},
+		AssertionResponse: protocol.AuthenticatorAssertionResponse{
+			AuthenticatorResponse: protocol.AuthenticatorResponse{ClientDataJSON: []byte(`{"type":"webauthn.get","challenge":"Y2hhbGxlbmdl","origin":"http://localhost:3000"}`)},
+			AuthenticatorData:     data, Signature: []byte{1}, UserHandle: []byte{1},
+		},
+	}
+	body, err := json.Marshal(map[string]any{"loginId": "token", "credential": credential})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := &fakeLoginServiceAPI{token: "session-token"}
+	h := NewHandler(nil, service, "http://localhost:3000")
+	e := echo.New()
+	e.POST("/finish", h.FinishLogin)
+	request := httptest.NewRequest(http.MethodPost, "/finish", strings.NewReader(string(body)))
+	request.Header.Set(echo.HeaderOrigin, "http://localhost:3000")
+	request.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	res := httptest.NewRecorder()
+	e.ServeHTTP(res, request)
+	if res.Code != 204 || service.finishCalls != 1 {
+		t.Fatalf("status=%d body=%s", res.Code, res.Body.String())
+	}
+	cookies := res.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != "todo_session" || cookies[0].Value != "session-token" || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode || cookies[0].Secure {
+		t.Fatalf("insecure local cookie: %+v", cookies)
+	}
+
+	service.err = ErrInvalidLogin
+	bad := httptest.NewRequest(http.MethodPost, "/finish", strings.NewReader(string(body)))
+	bad.Header.Set(echo.HeaderOrigin, "http://localhost:3000")
+	bad.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	res = httptest.NewRecorder()
+	e.ServeHTTP(res, bad)
+	if res.Code != 400 || len(res.Result().Cookies()) != 0 {
+		t.Fatalf("failure issued session: %d", res.Code)
+	}
+
+	for _, tc := range []struct {
+		name, origin, contentType, body string
+		serviceErr                      error
+		want                            int
+	}{
+		{name: "missing origin", origin: "", contentType: echo.MIMEApplicationJSON, body: string(body), want: 403},
+		{name: "wrong content type", origin: "http://localhost:3000", contentType: "text/plain", body: string(body), want: 415},
+		{name: "bad JSON", origin: "http://localhost:3000", contentType: echo.MIMEApplicationJSON, body: "{", want: 400},
+		{name: "missing token", origin: "http://localhost:3000", contentType: echo.MIMEApplicationJSON, body: "{}", want: 400},
+		{name: "internal error", origin: "http://localhost:3000", contentType: echo.MIMEApplicationJSON, body: string(body), serviceErr: errors.New("private secret"), want: 503},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			service.err = tc.serviceErr
+			r := httptest.NewRequest(http.MethodPost, "/finish", strings.NewReader(tc.body))
+			r.Header.Set(echo.HeaderOrigin, tc.origin)
+			r.Header.Set(echo.HeaderContentType, tc.contentType)
+			res := httptest.NewRecorder()
+			e.ServeHTTP(res, r)
+			if res.Code != tc.want || len(res.Result().Cookies()) != 0 || strings.Contains(res.Body.String(), "private secret") {
+				t.Fatalf("status=%d cookie=%v body=%s", res.Code, res.Result().Cookies(), res.Body.String())
+			}
+		})
+	}
+	service.err = nil
+	secureHandler := NewHandler(nil, service, "https://ca-techlounge-todo.kyo8.dev")
+	secureEcho := echo.New()
+	secureEcho.POST("/finish", secureHandler.FinishLogin)
+	secureReq := httptest.NewRequest(http.MethodPost, "/finish", strings.NewReader(string(body)))
+	secureReq.Header.Set(echo.HeaderOrigin, "https://ca-techlounge-todo.kyo8.dev")
+	secureReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	secureRes := httptest.NewRecorder()
+	secureEcho.ServeHTTP(secureRes, secureReq)
+	if secureRes.Code != 204 || len(secureRes.Result().Cookies()) != 1 || !secureRes.Result().Cookies()[0].Secure {
+		t.Fatalf("cloud cookie must be secure: %d", secureRes.Code)
 	}
 }

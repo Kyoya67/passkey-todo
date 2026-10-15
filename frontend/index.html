@@ -22,7 +22,7 @@
           <p class="eyebrow">PASSKEY</p>
           <h2 id="passkey-heading">パスキーを登録</h2>
           <p class="passkey-note">
-            この端末のパスキーで新しいユーザーを作成します。登録後のログイン機能はまだありません。
+            この端末のパスキーで新しいユーザーを作成します。登録後にログインしてください。
           </p>
         </div>
         <div class="passkey-action">
@@ -30,6 +30,19 @@
             パスキーを登録する
           </button>
           <p id="passkey-status" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+      <section class="panel passkey-panel" aria-labelledby="login-heading">
+        <div>
+          <p class="eyebrow">SIGN IN</p>
+          <h2 id="login-heading">パスキーでログイン</h2>
+          <p class="passkey-note">
+            ログイン後にセッションCookieを発行します。TODOのユーザー別制御は未対応です。
+          </p>
+        </div>
+        <div class="passkey-action">
+          <button id="login-passkey" type="button" class="button primary">ログインする</button>
+          <p id="login-status" role="status" aria-live="polite"></p>
         </div>
       </section>
       <section class="panel composer">

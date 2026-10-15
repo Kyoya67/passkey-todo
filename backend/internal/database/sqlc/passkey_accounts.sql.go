@@ -113,3 +113,23 @@ func (q *Queries) ListPasskeyCredentialsByUser(ctx context.Context, userID pgtyp
 	}
 	return items, nil
 }
+
+const updatePasskeyCredential = `-- name: UpdatePasskeyCredential :execrows
+UPDATE passkey_credentials
+SET credential_data = $1, last_used_at = NOW()
+WHERE credential_id = $2 AND user_id = $3
+`
+
+type UpdatePasskeyCredentialParams struct {
+	CredentialData []byte      `json:"credential_data"`
+	CredentialID   []byte      `json:"credential_id"`
+	UserID         pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) UpdatePasskeyCredential(ctx context.Context, arg UpdatePasskeyCredentialParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updatePasskeyCredential, arg.CredentialData, arg.CredentialID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}

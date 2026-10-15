@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -17,11 +18,17 @@ type transactionStarter interface {
 }
 
 type Repository struct {
-	db transactionStarter
+	db      transactionStarter
+	queries credentialQueries
 }
 
-func NewRepository(db transactionStarter) *Repository {
-	return &Repository{db: db}
+type credentialQueries interface {
+	GetPasskeyCredential(context.Context, []byte) (sqlc.PasskeyCredential, error)
+	UpdatePasskeyCredential(context.Context, sqlc.UpdatePasskeyCredentialParams) (int64, error)
+}
+
+func NewRepository(db transactionStarter, queries credentialQueries) *Repository {
+	return &Repository{db: db, queries: queries}
 }
 
 // CreateAccount persists a user and a previously verified credential atomically.
@@ -52,6 +59,43 @@ func (r *Repository) CreateAccount(ctx context.Context, userID [16]byte, credent
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit account transaction: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) FindCredential(ctx context.Context, credentialID []byte) ([16]byte, webauthn.Credential, error) {
+	row, err := r.queries.GetPasskeyCredential(ctx, credentialID)
+	if err != nil {
+		return [16]byte{}, webauthn.Credential{}, err
+	}
+	if !row.UserID.Valid {
+		return [16]byte{}, webauthn.Credential{}, fmt.Errorf("credential has no user ID")
+	}
+	var credential webauthn.Credential
+	if err := json.Unmarshal(row.CredentialData, &credential); err != nil {
+		return [16]byte{}, webauthn.Credential{}, fmt.Errorf("decode credential: %w", err)
+	}
+	if !bytes.Equal(credential.ID, credentialID) {
+		return [16]byte{}, webauthn.Credential{}, fmt.Errorf("credential ID mismatch")
+	}
+	return row.UserID.Bytes, credential, nil
+}
+
+func (r *Repository) UpdateCredential(ctx context.Context, userID [16]byte, credential webauthn.Credential) error {
+	data, err := json.Marshal(credential)
+	if err != nil {
+		return fmt.Errorf("encode credential: %w", err)
+	}
+	rows, err := r.queries.UpdatePasskeyCredential(ctx, sqlc.UpdatePasskeyCredentialParams{
+		CredentialData: data,
+		CredentialID:   credential.ID,
+		UserID:         pgtype.UUID{Bytes: userID, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("update credential: %w", err)
+	}
+	if rows != 1 {
+		return fmt.Errorf("credential no longer exists")
 	}
 	return nil
 }

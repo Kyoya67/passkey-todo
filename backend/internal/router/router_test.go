@@ -25,7 +25,7 @@ func (registrationService) FinishRegistration(context.Context, string, *protocol
 
 func TestRegister(t *testing.T) {
 	e := echo.New()
-	Register(e, todo.NewHandler(nil), auth.NewHandler(registrationService{}, "http://localhost:3000"))
+	Register(e, todo.NewHandler(nil), auth.NewHandler(registrationService{}, nil, "http://localhost:3000"))
 	for _, tc := range []struct {
 		method, path string
 		status       int
@@ -49,10 +49,16 @@ func TestRegister(t *testing.T) {
 	if err := spec.Validate(context.Background()); err != nil {
 		t.Fatalf("invalid OpenAPI: %v", err)
 	}
+	loginFound, todoFound := false, false
 	for _, route := range e.Routes() {
+		if route.Path == "/auth/login/begin" && route.Method == http.MethodPost {
+			loginFound = true
+		}
 		if route.Path == "/todos" && route.Method == http.MethodGet {
-			return
+			todoFound = true
 		}
 	}
-	t.Fatal("TODO routes missing")
+	if !loginFound || !todoFound {
+		t.Fatalf("missing routes: login=%t todo=%t", loginFound, todoFound)
+	}
 }

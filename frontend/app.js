@@ -13,6 +13,7 @@ const request = async (path, options = {}) => {
   const headers = options.body ? { 'Content-Type': 'application/json' } : {};
   const response = await fetch(`${apiURL()}${path}`, {
     ...options,
+    credentials: 'include',
     headers: { ...headers, ...options.headers },
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -77,7 +78,7 @@ passkeyButton.addEventListener('click', async () => {
         },
       }),
     });
-    passkeyStatus.textContent = '登録しました。ログイン機能はまだ利用できません。';
+    passkeyStatus.textContent = '登録しました。続けてログインしてください。';
     passkeyStatus.style.color = '#16816d';
   } catch (error) {
     passkeyStatus.textContent =
@@ -87,6 +88,62 @@ passkeyButton.addEventListener('click', async () => {
     passkeyStatus.style.color = '#c34e4e';
   } finally {
     passkeyButton.disabled = false;
+  }
+});
+const loginButton = document.querySelector('#login-passkey');
+const loginStatus = document.querySelector('#login-status');
+loginButton.addEventListener('click', async () => {
+  if (!window.PublicKeyCredential || !navigator.credentials?.get) {
+    loginStatus.textContent = 'このブラウザではパスキーを利用できません。';
+    return;
+  }
+  loginButton.disabled = true;
+  loginStatus.textContent = 'ログインを開始しています…';
+  try {
+    const { loginId, options } = await request('/auth/login/begin', { method: 'POST' });
+    const publicKey = options.publicKey;
+    const credential = await navigator.credentials.get({
+      publicKey: {
+        ...publicKey,
+        challenge: fromBase64URL(publicKey.challenge),
+        allowCredentials: publicKey.allowCredentials?.map((item) => ({
+          ...item,
+          id: fromBase64URL(item.id),
+        })),
+      },
+    });
+    if (!credential) throw new Error('パスキーを取得できませんでした');
+    await request('/auth/login/finish', {
+      method: 'POST',
+      body: JSON.stringify({
+        loginId,
+        credential: {
+          id: credential.id,
+          rawId: toBase64URL(credential.rawId),
+          type: credential.type,
+          response: {
+            clientDataJSON: toBase64URL(credential.response.clientDataJSON),
+            authenticatorData: toBase64URL(credential.response.authenticatorData),
+            signature: toBase64URL(credential.response.signature),
+            userHandle: credential.response.userHandle
+              ? toBase64URL(credential.response.userHandle)
+              : '',
+          },
+          clientExtensionResults: credential.getClientExtensionResults(),
+          authenticatorAttachment: credential.authenticatorAttachment ?? undefined,
+        },
+      }),
+    });
+    loginStatus.textContent = 'ログインしました。TODOのユーザー別制御は今後対応します。';
+    loginStatus.style.color = '#16816d';
+  } catch (error) {
+    loginStatus.textContent =
+      error.name === 'NotAllowedError'
+        ? 'ログインがキャンセルされたか、時間切れになりました。'
+        : `ログインに失敗しました（${error.message}）。最初からお試しください。`;
+    loginStatus.style.color = '#c34e4e';
+  } finally {
+    loginButton.disabled = false;
   }
 });
 const escapeHTML = (value) =>

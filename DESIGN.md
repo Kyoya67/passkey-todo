@@ -264,6 +264,8 @@ Issue #11ではCognitoを使わず、既存のGoバックエンドでWebAuthnに
 
 登録フローの保存先として、`users`と`passkey_credentials`を使用する。ユーザーIDはServiceがランダムなUUIDとして生成し、Credential IDはバイナリの主キーとして一意に保持する。ライブラリが返す公開鍵や署名カウンターを含むCredential情報はJSONBで保存し、ユーザーIDへの外部キーを持たせる。Repositoryではユーザー作成とCredential保存を同一トランザクションで行い、一方が失敗した場合は両方を確定しない。
 
+登録とログインのHandlerは`internal/auth/handler.go`の単一の`Handler`、Serviceは`internal/auth/service.go`の単一の`Service`にまとめる。ログイン固有の検証器・チャレンジ・セッションは`WithLogin`でServiceへ渡し、PostgreSQLのRepositoryを共有する。Redis保存処理は`store.go`に置く。テストも各実装ファイルに対応する`handler_test.go`、`service_test.go`、`store_test.go`にまとめる。
+
 #### パスキー登録の責務分担
 
 | 対象 | 責務 |
@@ -274,7 +276,7 @@ Issue #11ではCognitoを使わず、既存のGoバックエンドでWebAuthnに
 | Repository | ユーザーとCredentialを同一トランザクションで保存する。Credentialは値で受け取り、nilの扱いを不要にする |
 | ChallengeStore | Redisに登録中のデータをTTL付きで保存し、`GETDEL`で一度だけ取り出す。Serviceが利用するinterfaceの実装として扱う |
 
-`POST /auth/registration/begin`は5分間有効な登録IDとWebAuthn作成オプションを返す。ブラウザの応答を`POST /auth/registration/finish`へ送り、検証成功時のみユーザーとCredentialを保存して204を返す。この段階ではログインCookieを発行しない。HandlerとService、Serviceと保存先はinterfaceで接続する。
+`POST /auth/registration/begin`は5分間有効な登録IDとWebAuthn作成オプションを返す。ブラウザの応答を`POST /auth/registration/finish`へ送り、検証成功時のみユーザーとCredentialを保存して204を返す。登録だけではログインCookieを発行しない。HandlerとService、Serviceと保存先はinterfaceで接続する。
 
 チャレンジを含むライブラリのSessionDataは、RedisへTTL付きで保存する。これはログイン後のセッションとは別の、登録中だけのデータである。登録IDは暗号学的乱数32バイトで生成し、RedisのキーにはSHA-256ハッシュだけを含める。`SET NX`で衝突を拒否し、登録完了時に`GETDEL`で原子的に消費する。検証失敗やDB保存失敗の場合も同じ登録IDは再利用できず、ユーザーは登録開始からやり直す。期限切れキーはRedisが自動削除する。
 
@@ -282,7 +284,9 @@ Issue #11ではCognitoを使わず、既存のGoバックエンドでWebAuthnに
 
 `WEBAUTHN_RP_ID`と`WEBAUTHN_ORIGIN`を環境変数で指定する。Composeの既定値は`localhost`と`http://localhost:3000`で、Redis接続先はコンテナ内の`redis:6379`。ホスト上でGoを直接実行する場合はRP ID・Originと`REDIS_ADDR=localhost:6379`を指定する。認証設定を省略したままバックエンドを起動させないため、RP ID・Origin・Redis接続先のいずれかが未設定なら設定読み込み時にエラーとする。Redisへの接続も起動時のPingで確認し、失敗時は起動を停止する。AWSではElastiCacheのエンドポイントを`REDIS_ADDR`、TLS接続を`REDIS_TLS=true`としてECSに渡す。登録APIではフロントエンドのOriginとの完全一致を要求するため、通常のSwagger UIのOrigin（8081）からの登録は403になる。WebAuthn自体のOriginもライブラリで検証する。
 
-今回の登録処理は、一時テストDBとローカルRedisを使用したHTTP→実ライブラリ→Redis→実DBの統合テストで確認する。静的フロントエンドに登録ボタンを追加し、登録開始APIのbase64url値をブラウザのWebAuthn APIが要求するバイト列に変換してから`navigator.credentials.create`を呼び、作成されたCredentialをbase64urlに戻して登録完了APIへ送信する。登録後にログイン済みとは表示しない。端末の実パスキーを利用したブラウザ確認は未実施。開発DBにはユーザー・Credential用の002まで適用し、Redisを起動してバックエンドを再ビルド・再起動する。ログイン・Cookieセッション・CSRF対策・レート制限・TODO所有者の認可・AWS上の接続確認は、Issue #11の後続実装とする。現段階ではIssue #11全体の完了や本番運用可能な認証機能とは扱わない。
+ログインは`POST /auth/login/begin`でdiscoverable credential用のWebAuthnオプションと5分間有効なログインIDを発行し、Redisへチャレンジを保存する。`POST /auth/login/finish`ではログインIDを`GETDEL`で一度だけ消費し、Credential IDとユーザーハンドに一致する公開鍵をPostgreSQLから読み込む。実WebAuthnライブラリで署名・チャレンジ・Origin・ユーザー検証を確認した後に、署名カウンター等をCredentialのJSONBへ書き戻し、Redisへ24時間のセッションを保存する。ブラウザにはランダムなセッショントークンをHttpOnly・SameSite=StrictのCookieで返し、HTTPS環境ではSecureも付ける。RedisにはトークンのSHA-256ハッシュをキーとして保存する。Originは明示許可し、Cookie付きのCORSリクエストを許可する。ログイン失敗時はCookieを発行しない。
+
+静的フロントエンドではbase64urlとWebAuthn用バイト列を相互変換し、登録は`navigator.credentials.create`、ログインは`navigator.credentials.get`を使用する。登録は開発者がローカルブラウザで確認済みだが、ログインの実端末ブラウザ検証と、Redis・PostgreSQLを通したログイン統合テストは未実施。登録側は既存の実DB・Redis統合テストがある。今回のログイン実装では、実WebAuthnライブラリを使った合成署名の検証、Fake保存先を用いたServiceテスト、実RedisでのログインID・セッション保存テストを実施した。Cookieからセッションを読み取る認証ミドルウェア、TODO所有者の認可、CSRF対策、レート制限、ログアウト、AWS上の接続確認は後続実装であり、現段階で本番運用可能な認証機能とは扱わない。
 
 今回の実装にはOpenAI Codexを利用した。開発者の「それぞれの責務を考えた上でhandlerとserviceも作っちゃって」という依頼と、Repositoryに置いた入力確認の責務への指摘を受け、上記の分離とテストを追加した。その後の「ログイン時のチャレンジやセッションもredis使う予定だからやはりチャレンジはredisにしよう」という判断に合わせて保存先を変更した。対応PRは未作成のため、PR番号確定時に`ai-usage/PR-<番号>.md`へ利用内容と検証結果を記録する。
 

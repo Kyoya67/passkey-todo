@@ -23,3 +23,8 @@ SELECT credential_id, user_id, credential_data, created_at, last_used_at
 FROM passkey_credentials
 WHERE user_id = $1
 ORDER BY created_at, credential_id;
+
+-- name: UpdatePasskeyCredential :execrows
+UPDATE passkey_credentials
+SET credential_data = sqlc.arg(credential_data), last_used_at = NOW()
+WHERE credential_id = sqlc.arg(credential_id) AND user_id = sqlc.arg(user_id);

@@ -14,12 +14,14 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 `challenge.go`では、次の観点をテストしている。実RedisへのSessionData保存・復元、TTLによる期限切れ、登録IDの再使用拒否、8並列での消費成功が1回だけになること、破損データとRedis障害を確認する。HTTP→Service→実ライブラリ→Redis→実DBの登録成功・再送拒否も統合テストで確認する。端末の実パスキーを使うブラウザE2Eは未実施。
 
+`handler.go`と`service.go`では、単一のHandler・Serviceによる登録とログインをテストする。discoverable credentialでのログイン開始、ログインIDの使い捨て、ユーザーハンド照合、合成署名を使った実WebAuthn検証、失敗時のCookie非発行、Origin制限、Cookie属性を確認する。テストケースも`handler_test.go`と`service_test.go`にまとめている。`store.go`は`store_test.go`でFake Redisと実RedisによるTTL、キーの消費、セッション保存を確認する。`repository.go`ではCredentialの検索・更新もテストする。ログイン全体の実DB統合テストと端末の実パスキーによるブラウザ確認は未実施。
+
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
 | webauthn.go | NewWebAuthn | 100.0% |
 | handler.go | NewHandler | 100.0% |
 |  | BeginRegistration | 100.0% |
-|  | FinishRegistration | 100.0% |
+|  | FinishRegistration | 95.7% |
 |  | checkOrigin | 100.0% |
 | service.go | NewService | 100.0% |
 |  | BeginRegistration | 82.4% |
@@ -29,14 +31,36 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 |  | WebAuthnDisplayName | 100.0% |
 |  | WebAuthnCredentials | 0.0% |
 | repository.go | NewRepository | 100.0% |
-|  | CreateAccount | 81.2% |
-| challenge.go | NewChallengeStore | 100.0% |
-|  | registrationKey | 100.0% |
-|  | Save | 91.7% |
-|  | Consume | 100.0% |
-| **パッケージ合計（統合テスト含む）** |  | **93.2%** |
+|  | CreateAccount | 37.5% |
+| challenge.go | NewChallengeStore | 0.0% |
+|  | registrationKey | 0.0% |
+|  | Save | 0.0% |
+|  | Consume | 0.0% |
+| handler.go | BeginLogin | 88.9% |
+|  | FinishLogin | 88.5% |
+| service.go | WithLogin | 100.0% |
+|  | BeginLogin | 91.7% |
+|  | FinishLogin | 94.3% |
+|  | WebAuthnID | 100.0% |
+|  | WebAuthnName | 0.0% |
+|  | WebAuthnDisplayName | 0.0% |
+|  | WebAuthnCredentials | 100.0% |
+| store.go | NewLoginStore | 100.0% |
+|  | loginKey | 100.0% |
+|  | Save | 83.3% |
+|  | Consume | 77.8% |
+|  | NewSessionStore | 100.0% |
+|  | sessionKey | 100.0% |
+|  | Save | 83.3% |
+| repository.go | FindCredential | 90.9% |
+|  | UpdateCredential | 77.8% |
+| **パッケージ合計（外部DB・Redisテスト除く）** |  | **79.2%** |
 
-計測は`INTEGRATION_DATABASE_URL`に専用テストDB、`REDIS_TEST_ADDR`にローカルRedisを指定して`go test ./... -coverprofile=/tmp/kyoya-auth-redis-coverage.out -count=1`、`go tool cover -func=/tmp/kyoya-auth-redis-coverage.out`で行った。PostgreSQLには001〜002が必要。`go test -race ./internal/auth -count=1`も同じ設定で成功した。実行時だけ作成したテストDBは終了後に削除し、開発DBは変更していない。Redisの検証にはランダムなキーだけを使い、他のキーは削除していない。`WebAuthnCredentials`は新規ユーザーの空Credential一覧を返すインターフェース実装で、現在の登録経路では呼ばれない。
+今回の計測は`go test ./internal/auth -coverprofile=/private/tmp/kyoya-auth-unified-coverage.out -count=1`と`go tool cover -func=/private/tmp/kyoya-auth-unified-coverage.out`で行った。専用テストDBとRedisの接続先は指定せず、外部I/Oを伴う統合テストはスキップした。Redis統合テストも試したが、実行環境からローカルRedisへのTCP接続が許可されず失敗したため、この計測値には含めない。前回の88.3%はRedisテスト込みの値であり比較条件が異なる。`WebAuthnCredentials`は新規ユーザーの空Credential一覧を返すインターフェース実装で、登録経路では呼ばれない。
+
+## internal/middleware
+
+`cors_test.go`では、許可OriginへのCookie付きリクエストのCORSヘッダーを確認する。`cors.go`の`CORS`は単体テストで100.0%。
 
 ## internal/config
 
@@ -51,7 +75,7 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 ## internal/router
 
-`router.go`では、次の観点をテストしている。渡された登録HandlerとTODO Handlerが生成ルーティングへ接続され、Health APIへ到達すること、TODOルートが登録されていること、埋め込みOpenAPI定義が有効であることを確認する。RepositoryとServiceの組み立ては`cmd/api/main.go`が担当する。
+`router.go`では、次の観点をテストしている。渡された登録・ログインHandlerとTODO Handlerが生成ルーティングへ接続され、Health APIへ到達すること、TODOルートが登録されていること、埋め込みOpenAPI定義が有効であることを確認する。RepositoryとServiceの組み立ては`cmd/api/main.go`が担当する。
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
