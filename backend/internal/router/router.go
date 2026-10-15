@@ -9,12 +9,14 @@ import (
 )
 
 type handlers struct {
-	*todo.TodoHandler
+	*todoRoutes
 	*auth.Handler
 }
 
+type todoRoutes struct{ *todo.Handler }
+
 var _ openapi.ServerInterface = (*handlers)(nil)
 
-func Register(e *echo.Echo, todoHandler *todo.TodoHandler, authHandler *auth.Handler) {
-	openapi.RegisterHandlers(e, &handlers{TodoHandler: todoHandler, Handler: authHandler})
+func Register(e *echo.Echo, todoHandler *todo.Handler, authHandler *auth.Handler) {
+	openapi.RegisterHandlers(e, &handlers{todoRoutes: &todoRoutes{todoHandler}, Handler: authHandler})
 }

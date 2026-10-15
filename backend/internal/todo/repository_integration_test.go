@@ -11,7 +11,7 @@ import (
 	sqlc "github.com/catechlounge/kyoya67-todo/backend/internal/database/sqlc"
 )
 
-func TestTodoRepositoryIntegration(t *testing.T) {
+func TestRepositoryIntegration(t *testing.T) {
 	databaseURL := os.Getenv("INTEGRATION_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("INTEGRATION_DATABASE_URL is not set")
@@ -28,7 +28,7 @@ func TestTodoRepositoryIntegration(t *testing.T) {
 		t.Fatalf("ping database: %v", err)
 	}
 
-	repository := NewTodoRepository(sqlc.New(pool))
+	repository := NewRepository(sqlc.New(pool))
 	title := "integration-test-" + time.Now().UTC().Format("20060102150405.000000000")
 
 	created, err := repository.Create(ctx, title)

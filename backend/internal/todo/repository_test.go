@@ -31,7 +31,7 @@ func (f *fakeTodoQueries) DeleteTodo(ctx context.Context, id int64) (int64, erro
 	return f.deleteFn(ctx, id)
 }
 
-func TestTodoRepository(t *testing.T) {
+func TestRepository(t *testing.T) {
 	wantErr := errors.New("database error")
 	queries := &fakeTodoQueries{
 		createFn: func(_ context.Context, title string) (sqlc.Todo, error) {
@@ -45,7 +45,7 @@ func TestTodoRepository(t *testing.T) {
 		},
 		deleteFn: func(context.Context, int64) (int64, error) { return 1, nil },
 	}
-	repository := NewTodoRepository(queries)
+	repository := NewRepository(queries)
 
 	created, err := repository.Create(context.Background(), "create")
 	if err != nil || created.Title != "create" {

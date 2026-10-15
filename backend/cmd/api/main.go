@@ -33,9 +33,9 @@ func main() {
 	defer pool.Close()
 
 	queries := sqlc.New(pool)
-	todoRepository := todo.NewTodoRepository(queries)
-	todoService := todo.NewTodoService(todoRepository)
-	todoHandler := todo.NewTodoHandler(todoService)
+	todoRepository := todo.NewRepository(queries)
+	todoService := todo.NewService(todoRepository)
+	todoHandler := todo.NewHandler(todoService)
 
 	e := echo.New()
 	e.Use(middleware.CORS(cfg.CORSAllowedOrigins))

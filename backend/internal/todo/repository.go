@@ -6,7 +6,7 @@ import (
 	sqlc "github.com/catechlounge/kyoya67-todo/backend/internal/database/sqlc"
 )
 
-type TodoRepository struct {
+type Repository struct {
 	queries todoQueries
 }
 
@@ -17,20 +17,20 @@ type todoQueries interface {
 	DeleteTodo(context.Context, int64) (int64, error)
 }
 
-func NewTodoRepository(queries todoQueries) *TodoRepository {
-	return &TodoRepository{
+func NewRepository(queries todoQueries) *Repository {
+	return &Repository{
 		queries: queries,
 	}
 }
 
-func (r *TodoRepository) Create(
+func (r *Repository) Create(
 	ctx context.Context,
 	title string,
 ) (sqlc.Todo, error) {
 	return r.queries.CreateTodo(ctx, title)
 }
 
-func (r *TodoRepository) List(ctx context.Context, title string, limit, offset int32) ([]sqlc.Todo, error) {
+func (r *Repository) List(ctx context.Context, title string, limit, offset int32) ([]sqlc.Todo, error) {
 	return r.queries.ListTodos(ctx, sqlc.ListTodosParams{
 		Title:      title,
 		PageLimit:  limit,
@@ -38,11 +38,11 @@ func (r *TodoRepository) List(ctx context.Context, title string, limit, offset i
 	})
 }
 
-func (r *TodoRepository) Update(ctx context.Context, id int64, title string) (sqlc.Todo, error) {
+func (r *Repository) Update(ctx context.Context, id int64, title string) (sqlc.Todo, error) {
 	return r.queries.UpdateTodo(ctx, sqlc.UpdateTodoParams{ID: id, Title: title})
 }
 
-func (r *TodoRepository) Delete(ctx context.Context, id int64) error {
+func (r *Repository) Delete(ctx context.Context, id int64) error {
 	_, err := r.queries.DeleteTodo(ctx, id)
 	return err
 }

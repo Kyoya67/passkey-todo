@@ -64,18 +64,18 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
-| handler.go | NewTodoHandler | 100.0% |
+| handler.go | NewHandler | 100.0% |
 |  | GetHealth | 100.0% |
 |  | CreateTodo | 100.0% |
 |  | ListTodos | 88.2% |
 |  | UpdateTodo | 90.9% |
 |  | DeleteTodo | 100.0% |
 |  | toTodo | 100.0% |
-`service_test.go`では、Fake Repositoryを差し替え、タイトルの入力検証、ページネーションのデフォルト値・上限値・不正値、Repositoryエラーの伝播、`pgx.ErrNoRows`から`ErrTodoNotFound`への変換をテストしている。
+`service_test.go`では、Fake Repositoryを差し替え、タイトルの入力検証、ページネーションのデフォルト値・上限値・不正値、Repositoryエラーの伝播、`pgx.ErrNoRows`から`ErrNotFound`への変換をテストしている。
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
-| service.go | NewTodoService | 100.0% |
+| service.go | NewService | 100.0% |
 |  | Create | 100.0% |
 |  | List | 100.0% |
 |  | Update | 83.3% |
@@ -84,7 +84,7 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
-| repository.go | NewTodoRepository | 100.0% |
+| repository.go | NewRepository | 100.0% |
 |  | Create | 100.0% |
 |  | List | 100.0% |
 |  | Update | 100.0% |
@@ -97,7 +97,7 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
-| repository.go | NewTodoRepository | 100.0% |
+| repository.go | NewRepository | 100.0% |
 |  | Create | 100.0% |
 |  | List | 100.0% |
 |  | Update | 100.0% |

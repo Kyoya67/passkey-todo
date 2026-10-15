@@ -25,7 +25,7 @@ func (registrationService) FinishRegistration(context.Context, string, *protocol
 
 func TestRegister(t *testing.T) {
 	e := echo.New()
-	Register(e, todo.NewTodoHandler(nil), auth.NewHandler(registrationService{}, "http://localhost:3000"))
+	Register(e, todo.NewHandler(nil), auth.NewHandler(registrationService{}, "http://localhost:3000"))
 	for _, tc := range []struct {
 		method, path string
 		status       int

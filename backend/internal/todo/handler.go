@@ -18,17 +18,17 @@ type todoService interface {
 	Delete(context.Context, int64) error
 }
 
-type TodoHandler struct{ service todoService }
+type Handler struct{ service todoService }
 
-func NewTodoHandler(service todoService) *TodoHandler {
-	return &TodoHandler{service: service}
+func NewHandler(service todoService) *Handler {
+	return &Handler{service: service}
 }
 
-func (h *TodoHandler) GetHealth(c echo.Context) error {
+func (h *Handler) GetHealth(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (h *TodoHandler) CreateTodo(c echo.Context) error {
+func (h *Handler) CreateTodo(c echo.Context) error {
 	var request openapi.CreateTodoJSONRequestBody
 	if err := c.Bind(&request); err != nil {
 		return c.NoContent(http.StatusBadRequest)
@@ -42,7 +42,7 @@ func (h *TodoHandler) CreateTodo(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *TodoHandler) ListTodos(c echo.Context, params openapi.ListTodosParams) error {
+func (h *Handler) ListTodos(c echo.Context, params openapi.ListTodosParams) error {
 	var title string
 	if params.Title != nil {
 		title = *params.Title
@@ -68,7 +68,7 @@ func (h *TodoHandler) ListTodos(c echo.Context, params openapi.ListTodosParams) 
 	return c.JSON(http.StatusOK, response)
 }
 
-func (h *TodoHandler) UpdateTodo(c echo.Context, id openapi.TodoID) error {
+func (h *Handler) UpdateTodo(c echo.Context, id openapi.TodoID) error {
 	var request openapi.UpdateTodoJSONRequestBody
 	if err := c.Bind(&request); err != nil {
 		return c.NoContent(http.StatusBadRequest)
@@ -77,7 +77,7 @@ func (h *TodoHandler) UpdateTodo(c echo.Context, id openapi.TodoID) error {
 	if errors.Is(err, ErrInvalidTitle) {
 		return c.NoContent(http.StatusBadRequest)
 	}
-	if errors.Is(err, ErrTodoNotFound) {
+	if errors.Is(err, ErrNotFound) {
 		return c.NoContent(http.StatusNotFound)
 	}
 	if err != nil {
@@ -86,9 +86,9 @@ func (h *TodoHandler) UpdateTodo(c echo.Context, id openapi.TodoID) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *TodoHandler) DeleteTodo(c echo.Context, id openapi.TodoID) error {
+func (h *Handler) DeleteTodo(c echo.Context, id openapi.TodoID) error {
 	if err := h.service.Delete(c.Request().Context(), id); err != nil {
-		if errors.Is(err, ErrTodoNotFound) {
+		if errors.Is(err, ErrNotFound) {
 			return c.NoContent(http.StatusNotFound)
 		}
 		return c.NoContent(http.StatusServiceUnavailable)

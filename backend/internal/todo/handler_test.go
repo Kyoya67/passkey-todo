@@ -17,26 +17,26 @@ import (
 	"github.com/catechlounge/kyoya67-todo/backend/internal/openapi"
 )
 
-type fakeTodoService struct {
+type fakeService struct {
 	createFn func(context.Context, string) error
 	listFn   func(context.Context, string, int32, int32) ([]sqlc.Todo, error)
 	updateFn func(context.Context, int64, string) error
 	deleteFn func(context.Context, int64) error
 }
 
-func (f *fakeTodoService) Create(ctx context.Context, title string) error {
+func (f *fakeService) Create(ctx context.Context, title string) error {
 	return f.createFn(ctx, title)
 }
 
-func (f *fakeTodoService) List(ctx context.Context, title string, limit, offset int32) ([]sqlc.Todo, error) {
+func (f *fakeService) List(ctx context.Context, title string, limit, offset int32) ([]sqlc.Todo, error) {
 	return f.listFn(ctx, title, limit, offset)
 }
 
-func (f *fakeTodoService) Update(ctx context.Context, id int64, title string) error {
+func (f *fakeService) Update(ctx context.Context, id int64, title string) error {
 	return f.updateFn(ctx, id, title)
 }
 
-func (f *fakeTodoService) Delete(ctx context.Context, id int64) error {
+func (f *fakeService) Delete(ctx context.Context, id int64) error {
 	return f.deleteFn(ctx, id)
 }
 
@@ -48,8 +48,8 @@ func newHandlerContext(method, target, body string) (echo.Context, *httptest.Res
 	return e.NewContext(request, response), response
 }
 
-func TestTodoHandlerGetHealth(t *testing.T) {
-	handler := NewTodoHandler(&fakeTodoService{})
+func TestHandlerGetHealth(t *testing.T) {
+	handler := NewHandler(&fakeService{})
 	ctx, response := newHandlerContext(http.MethodGet, "/health", "")
 
 	if err := handler.GetHealth(ctx); err != nil {
@@ -61,9 +61,9 @@ func TestTodoHandlerGetHealth(t *testing.T) {
 	}
 }
 
-func TestTodoHandlerCreate(t *testing.T) {
+func TestHandlerCreate(t *testing.T) {
 	t.Run("returns bad request for invalid JSON", func(t *testing.T) {
-		handler := NewTodoHandler(&fakeTodoService{createFn: func(context.Context, string) error { return nil }})
+		handler := NewHandler(&fakeService{createFn: func(context.Context, string) error { return nil }})
 		ctx, response := newHandlerContext(http.MethodPost, "/todos", "{")
 		if err := handler.CreateTodo(ctx); err != nil {
 			t.Fatal(err)
@@ -83,7 +83,7 @@ func TestTodoHandlerCreate(t *testing.T) {
 		{name: "success", err: nil, want: http.StatusNoContent},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			handler := NewTodoHandler(&fakeTodoService{createFn: func(_ context.Context, title string) error {
+			handler := NewHandler(&fakeService{createFn: func(_ context.Context, title string) error {
 				if title != "todo" {
 					t.Fatalf("title=%q", title)
 				}
@@ -100,9 +100,9 @@ func TestTodoHandlerCreate(t *testing.T) {
 	}
 }
 
-func TestTodoHandlerList(t *testing.T) {
+func TestHandlerList(t *testing.T) {
 	now := time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)
-	handler := NewTodoHandler(&fakeTodoService{listFn: func(_ context.Context, title string, limit, offset int32) ([]sqlc.Todo, error) {
+	handler := NewHandler(&fakeService{listFn: func(_ context.Context, title string, limit, offset int32) ([]sqlc.Todo, error) {
 		if title != "search" || limit != 10 || offset != 2 {
 			t.Fatalf("title=%q limit=%d offset=%d", title, limit, offset)
 		}
@@ -125,19 +125,19 @@ func TestTodoHandlerList(t *testing.T) {
 	}
 }
 
-func TestTodoHandlerUpdateAndDelete(t *testing.T) {
+func TestHandlerUpdateAndDelete(t *testing.T) {
 	for _, test := range []struct {
 		name string
 		err  error
 		want int
 	}{
 		{name: "invalid title", err: ErrInvalidTitle, want: http.StatusBadRequest},
-		{name: "not found", err: ErrTodoNotFound, want: http.StatusNotFound},
+		{name: "not found", err: ErrNotFound, want: http.StatusNotFound},
 		{name: "service error", err: errors.New("failed"), want: http.StatusServiceUnavailable},
 		{name: "success", err: nil, want: http.StatusNoContent},
 	} {
 		t.Run("update "+test.name, func(t *testing.T) {
-			handler := NewTodoHandler(&fakeTodoService{updateFn: func(_ context.Context, id int64, title string) error {
+			handler := NewHandler(&fakeService{updateFn: func(_ context.Context, id int64, title string) error {
 				if id != 1 || title != "updated" {
 					t.Fatalf("id=%d title=%q", id, title)
 				}
@@ -153,7 +153,7 @@ func TestTodoHandlerUpdateAndDelete(t *testing.T) {
 		})
 
 		t.Run("delete "+test.name, func(t *testing.T) {
-			handler := NewTodoHandler(&fakeTodoService{deleteFn: func(_ context.Context, id int64) error {
+			handler := NewHandler(&fakeService{deleteFn: func(_ context.Context, id int64) error {
 				if id != 1 {
 					t.Fatalf("id=%d", id)
 				}

@@ -13,7 +13,7 @@ import (
 var (
 	ErrInvalidTitle = errors.New("title must not be empty")
 	ErrInvalidPage  = errors.New("invalid pagination")
-	ErrTodoNotFound = errors.New("todo not found")
+	ErrNotFound     = errors.New("todo not found")
 )
 
 const (
@@ -28,15 +28,15 @@ type todoRepository interface {
 	Delete(context.Context, int64) error
 }
 
-type TodoService struct {
+type Service struct {
 	repository todoRepository
 }
 
-func NewTodoService(repository todoRepository) *TodoService {
-	return &TodoService{repository: repository}
+func NewService(repository todoRepository) *Service {
+	return &Service{repository: repository}
 }
 
-func (s *TodoService) Create(ctx context.Context, title string) error {
+func (s *Service) Create(ctx context.Context, title string) error {
 	if strings.TrimSpace(title) == "" {
 		return ErrInvalidTitle
 	}
@@ -44,7 +44,7 @@ func (s *TodoService) Create(ctx context.Context, title string) error {
 	return err
 }
 
-func (s *TodoService) List(ctx context.Context, title string, limit, offset int32) ([]sqlc.Todo, error) {
+func (s *Service) List(ctx context.Context, title string, limit, offset int32) ([]sqlc.Todo, error) {
 	if limit == 0 {
 		limit = defaultTodoLimit
 	}
@@ -55,21 +55,21 @@ func (s *TodoService) List(ctx context.Context, title string, limit, offset int3
 	return s.repository.List(ctx, title, limit, offset)
 }
 
-func (s *TodoService) Update(ctx context.Context, id int64, title string) error {
+func (s *Service) Update(ctx context.Context, id int64, title string) error {
 	if strings.TrimSpace(title) == "" {
 		return ErrInvalidTitle
 	}
 	_, err := s.repository.Update(ctx, id, title)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrTodoNotFound
+		return ErrNotFound
 	}
 	return err
 }
 
-func (s *TodoService) Delete(ctx context.Context, id int64) error {
+func (s *Service) Delete(ctx context.Context, id int64) error {
 	err := s.repository.Delete(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrTodoNotFound
+		return ErrNotFound
 	}
 	return err
 }
