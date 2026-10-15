@@ -200,11 +200,6 @@ const renderCard = (todo) => `
       <p class="todo-meta">更新：${new Date(todo.updatedAt).toLocaleString('ja-JP')}</p>
     </div>
     <div class="todo-actions">
-      <label>状態
-        <select class="todo-status" aria-label="${escapeHTML(todo.title)}の状態">
-          ${columns.map(({ status, label }) => `<option value="${status}" ${todo.status === status ? 'selected' : ''}>${label}</option>`).join('')}
-        </select>
-      </label>
       <button class="button secondary edit" type="button">編集</button>
       <button class="button secondary delete" type="button">削除</button>
     </div>
@@ -235,9 +230,6 @@ const updateStatus = async (id, status) => {
   if (!todo || todo.status === status || statusBusy) return;
   statusBusy = true;
   list.setAttribute('aria-busy', 'true');
-  list.querySelectorAll('.todo-status').forEach((select) => {
-    select.disabled = true;
-  });
   try {
     const updated = await request(`/todos/${id}`, {
       method: 'PUT',
@@ -299,14 +291,9 @@ document.querySelector('#todo-form').addEventListener('submit', async (event) =>
     show(`追加に失敗しました（${error.message}）`, true);
   }
 });
-list.addEventListener('change', async (event) => {
-  if (!event.target.matches('.todo-status')) return;
-  const item = event.target.closest('.todo');
-  if (item) await updateStatus(item.dataset.id, event.target.value);
-});
 list.addEventListener('dragstart', (event) => {
   const item = event.target.closest('.todo');
-  if (!item || event.target.closest('button, input, select') || statusBusy) {
+  if (!item || event.target.closest('button, input') || statusBusy) {
     event.preventDefault();
     return;
   }
