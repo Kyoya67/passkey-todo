@@ -192,6 +192,7 @@ const columns = [
 let currentTodos = new Map();
 let draggedTodoID = null;
 let statusBusy = false;
+let touchDrag = null;
 
 const renderCard = (todo) => `
   <article class="todo" data-id="${escapeHTML(todo.id)}" draggable="true">
@@ -223,6 +224,25 @@ const clearDrag = () => {
   list.querySelectorAll('.is-drop-target, .is-dragging').forEach((element) => {
     element.classList.remove('is-drop-target', 'is-dragging');
   });
+};
+
+const highlightColumn = (column) => {
+  list.querySelectorAll('.is-drop-target').forEach((target) => {
+    if (target !== column) target.classList.remove('is-drop-target');
+  });
+  column?.classList.add('is-drop-target');
+};
+
+const clearTouchDrag = () => {
+  if (!touchDrag) return;
+  clearTimeout(touchDrag.timer);
+  touchDrag.ghost?.remove();
+  touchDrag.card.classList.remove('is-dragging');
+  if (touchDrag.card.hasPointerCapture?.(touchDrag.pointerId)) {
+    touchDrag.card.releasePointerCapture(touchDrag.pointerId);
+  }
+  highlightColumn(null);
+  touchDrag = null;
 };
 
 const updateStatus = async (id, status) => {
@@ -293,7 +313,7 @@ document.querySelector('#todo-form').addEventListener('submit', async (event) =>
 });
 list.addEventListener('dragstart', (event) => {
   const item = event.target.closest('.todo');
-  if (!item || event.target.closest('button, input') || statusBusy) {
+  if (!item || event.target.closest('button, input') || statusBusy || touchDrag?.active) {
     event.preventDefault();
     return;
   }
@@ -307,10 +327,7 @@ list.addEventListener('dragover', (event) => {
   if (!column || !draggedTodoID || statusBusy) return;
   event.preventDefault();
   event.dataTransfer.dropEffect = 'move';
-  list.querySelectorAll('.is-drop-target').forEach((target) => {
-    if (target !== column) target.classList.remove('is-drop-target');
-  });
-  column.classList.add('is-drop-target');
+  highlightColumn(column);
 });
 list.addEventListener('drop', async (event) => {
   const column = event.target.closest('.kanban-column');
@@ -324,6 +341,63 @@ list.addEventListener('dragend', clearDrag);
 list.addEventListener('dragleave', (event) => {
   const column = event.target.closest('.kanban-column');
   if (column && !column.contains(event.relatedTarget)) column.classList.remove('is-drop-target');
+});
+list.addEventListener('pointerdown', (event) => {
+  if (event.pointerType !== 'touch' || statusBusy || event.target.closest('button, input')) return;
+  const card = event.target.closest('.todo');
+  if (!card) return;
+  clearTouchDrag();
+  touchDrag = {
+    pointerId: event.pointerId,
+    id: card.dataset.id,
+    card,
+    startX: event.clientX,
+    startY: event.clientY,
+    active: false,
+    ghost: null,
+    timer: null,
+  };
+  touchDrag.timer = setTimeout(() => {
+    if (!touchDrag || touchDrag.pointerId !== event.pointerId) return;
+    touchDrag.active = true;
+    card.classList.add('is-dragging');
+    const ghost = card.cloneNode(true);
+    ghost.classList.add('touch-drag-preview');
+    ghost.setAttribute('aria-hidden', 'true');
+    ghost.style.width = `${card.getBoundingClientRect().width}px`;
+    ghost.style.left = `${event.clientX}px`;
+    ghost.style.top = `${event.clientY}px`;
+    document.body.append(ghost);
+    touchDrag.ghost = ghost;
+    card.setPointerCapture?.(event.pointerId);
+  }, 250);
+});
+window.addEventListener('pointermove', (event) => {
+  if (!touchDrag || event.pointerId !== touchDrag.pointerId) return;
+  if (!touchDrag.active) {
+    if (Math.hypot(event.clientX - touchDrag.startX, event.clientY - touchDrag.startY) > 10) {
+      clearTouchDrag();
+    }
+    return;
+  }
+  event.preventDefault();
+  touchDrag.ghost.style.left = `${event.clientX}px`;
+  touchDrag.ghost.style.top = `${event.clientY}px`;
+  highlightColumn(
+    document.elementFromPoint(event.clientX, event.clientY)?.closest('.kanban-column')
+  );
+});
+window.addEventListener('pointerup', async (event) => {
+  if (!touchDrag || event.pointerId !== touchDrag.pointerId) return;
+  const { active, id } = touchDrag;
+  const column = active
+    ? document.elementFromPoint(event.clientX, event.clientY)?.closest('.kanban-column')
+    : null;
+  clearTouchDrag();
+  if (column) await updateStatus(id, column.dataset.status);
+});
+window.addEventListener('pointercancel', (event) => {
+  if (touchDrag?.pointerId === event.pointerId) clearTouchDrag();
 });
 list.addEventListener('click', async (event) => {
   const item = event.target.closest('.todo');

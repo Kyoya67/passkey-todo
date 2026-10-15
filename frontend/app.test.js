@@ -9,7 +9,11 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 function setup({ failUpdate = false } = {}) {
   const listeners = {};
+  const windowListeners = {};
   const calls = [];
+  let dropColumn = null;
+  const timers = new Map();
+  let nextTimer = 1;
   const todos = [
     { id: 1, title: 'One', status: 'not_started', updatedAt: '2026-10-15T00:00:00Z' },
     { id: 2, title: 'Two', status: 'in_progress', updatedAt: '2026-10-15T00:00:00Z' },
@@ -65,10 +69,25 @@ function setup({ failUpdate = false } = {}) {
     dialog.open = false;
   };
   const context = {
-    document: { querySelector: (selector) => elements.get(selector) },
-    window: { location: { hostname: 'localhost' } },
+    document: {
+      querySelector: (selector) => elements.get(selector),
+      elementFromPoint: () => ({ closest: () => dropColumn }),
+      body: { append() {} },
+    },
+    window: {
+      location: { hostname: 'localhost' },
+      addEventListener(type, handler) {
+        windowListeners[type] = handler;
+      },
+    },
     navigator: {},
     URLSearchParams,
+    setTimeout: (callback) => {
+      const id = nextTimer++;
+      timers.set(id, callback);
+      return id;
+    },
+    clearTimeout: (id) => timers.delete(id),
     fetch: async (url, options = {}) => {
       calls.push({ url, options });
       if (options.method === 'PUT') {
@@ -81,7 +100,20 @@ function setup({ failUpdate = false } = {}) {
     },
   };
   vm.runInNewContext(app, context);
-  return { list, listeners, calls, elements };
+  return {
+    list,
+    listeners,
+    windowListeners,
+    calls,
+    elements,
+    setDropColumn: (column) => {
+      dropColumn = column;
+    },
+    flushTimers: () => {
+      for (const callback of timers.values()) callback();
+      timers.clear();
+    },
+  };
 }
 
 test('renders todos in three status columns', async () => {
@@ -98,6 +130,7 @@ test('renders todos in three status columns', async () => {
   }
   assert.match(list.innerHTML, /data-id="1" draggable="true"/);
   assert.doesNotMatch(list.innerHTML, /ここにTODOを移動/);
+  assert.doesNotMatch(list.innerHTML, /todo-status|<select/);
 });
 
 test('new todo omits status so the API defaults to not started', async () => {
@@ -131,24 +164,59 @@ test('dropping a card sends a status update and refreshes the board', async () =
 test('failed status update keeps the saved status visible', async () => {
   const { list, listeners, elements } = setup({ failUpdate: true });
   await tick();
-  await listeners.change({
-    target: { value: 'completed', matches: () => true, closest: () => ({ dataset: { id: '1' } }) },
+  const item = { dataset: { id: '1' }, classList: { add() {} } };
+  const column = { dataset: { status: 'completed' } };
+  listeners.dragstart({
+    target: { closest: (selector) => (selector === '.todo' ? item : null) },
+    dataTransfer: { setData() {} },
+    preventDefault() {},
   });
+  await listeners.drop({ target: { closest: () => column }, preventDefault() {} });
   assert.match(elements.get('#message').textContent, /状態の更新に失敗/);
   assert.match(list.innerHTML, /data-status="not_started"[\s\S]*data-id="1"/);
 });
 
-test('status menu remains an alternative to dragging', async () => {
-  const { list, listeners, calls } = setup();
+test('long-press touch drag moves a card without a status menu', async () => {
+  const { list, listeners, windowListeners, calls, setDropColumn, flushTimers } = setup();
   await tick();
-  await listeners.change({
-    target: {
-      value: 'in_progress',
-      matches: () => true,
-      closest: () => ({ dataset: { id: '1' } }),
-    },
+  const ghost = { style: {}, classList: { add() {} }, setAttribute() {}, remove() {} };
+  const card = {
+    dataset: { id: '1' },
+    classList: { add() {}, remove() {} },
+    cloneNode: () => ghost,
+    getBoundingClientRect: () => ({ width: 280 }),
+  };
+  const column = { dataset: { status: 'in_progress' }, classList: { add() {}, remove() {} } };
+  setDropColumn(column);
+  listeners.pointerdown({
+    pointerType: 'touch',
+    pointerId: 7,
+    clientX: 10,
+    clientY: 20,
+    target: { closest: (selector) => (selector === '.todo' ? card : null) },
   });
+  flushTimers();
+  await windowListeners.pointerup({ pointerId: 7, clientX: 50, clientY: 20 });
   const update = calls.find(({ options }) => options.method === 'PUT');
   assert.equal(JSON.parse(update.options.body).status, 'in_progress');
   assert.match(list.innerHTML, /data-status="in_progress"[\s\S]*data-id="1"/);
+});
+
+test('a tap does not move a card', async () => {
+  const { listeners, windowListeners, calls, setDropColumn } = setup();
+  await tick();
+  const card = { dataset: { id: '1' }, classList: { remove() {} } };
+  setDropColumn({ dataset: { status: 'completed' } });
+  listeners.pointerdown({
+    pointerType: 'touch',
+    pointerId: 8,
+    clientX: 10,
+    clientY: 20,
+    target: { closest: (selector) => (selector === '.todo' ? card : null) },
+  });
+  await windowListeners.pointerup({ pointerId: 8, clientX: 10, clientY: 20 });
+  assert.equal(
+    calls.some(({ options }) => options.method === 'PUT'),
+    false
+  );
 });
