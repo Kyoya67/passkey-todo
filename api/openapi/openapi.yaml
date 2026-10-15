@@ -155,8 +155,12 @@ paths:
             schema:
               $ref: '#/components/schemas/TodoRequest'
       responses:
-        '204':
+        '201':
           description: TODOを作成した
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Todo'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -196,7 +200,7 @@ paths:
         - todos
       security:
         - todoSession: []
-      summary: TODOのタイトルを更新
+      summary: TODOのタイトル・状態を更新
       description: ログイン中のユーザーが所有するTODOのみ更新する。他人のTODOは404を返す
       operationId: updateTodo
       parameters:
@@ -208,8 +212,12 @@ paths:
             schema:
               $ref: '#/components/schemas/TodoRequest'
       responses:
-        '204':
+        '200':
           description: TODOを更新した
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Todo'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -440,12 +448,20 @@ components:
           minLength: 1
           description: TODOのタイトル
           example: 買い物をする
+        status:
+          $ref: '#/components/schemas/TodoStatus'
+
+    TodoStatus:
+      type: string
+      description: 未着手・進行中・完了。省略時は未着手
+      enum: [not_started, in_progress, completed]
 
     Todo:
       type: object
       required:
         - id
         - title
+        - status
         - createdAt
         - updatedAt
       properties:
@@ -456,6 +472,8 @@ components:
         title:
           type: string
           example: 買い物をする
+        status:
+          $ref: '#/components/schemas/TodoStatus'
         createdAt:
           type: string
           format: date-time

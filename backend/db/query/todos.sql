@@ -1,10 +1,10 @@
 -- name: CreateTodo :one
 INSERT INTO todos (
-    title, user_id
+    title, user_id, status
 ) VALUES (
-    sqlc.arg(title), sqlc.arg(owner_id)::uuid
+    sqlc.arg(title), sqlc.arg(owner_id)::uuid, sqlc.arg(status)
 )
-RETURNING id, title, created_at, updated_at, user_id;
+RETURNING id, title, created_at, updated_at, user_id, status;
 
 -- name: ListTodos :many
 SELECT
@@ -12,7 +12,8 @@ SELECT
     title,
     created_at,
     updated_at,
-    user_id
+    user_id,
+    status
 FROM todos
 WHERE user_id = sqlc.arg(owner_id)::uuid
   AND title ILIKE '%' || sqlc.arg(title)::text || '%'
@@ -24,9 +25,10 @@ OFFSET sqlc.arg(page_offset)::int;
 UPDATE todos
 SET
     title = sqlc.arg(title),
+    status = COALESCE(NULLIF(sqlc.arg(status)::text, ''), status),
     updated_at = NOW()
 WHERE id = sqlc.arg(todo_id) AND user_id = sqlc.arg(owner_id)::uuid
-RETURNING id, title, created_at, updated_at, user_id;
+RETURNING id, title, created_at, updated_at, user_id, status;
 
 -- name: DeleteTodo :one
 DELETE FROM todos

@@ -70,18 +70,26 @@ body {
   line-height: 1.5;
 }
 .shell {
-  width: min(920px, calc(100% - 32px));
+  width: min(1280px, calc(100% - 32px));
   margin: auto;
   padding: 64px 0 80px;
 }
 .hero {
-  padding: 20px 8px 40px;
+  padding: 12px 8px 24px;
 }
 .hero-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+.hero-title {
+  margin: 0 0 6px;
+  color: #17212b;
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
 }
 .eyebrow {
   margin: 0 0 12px;
@@ -100,11 +108,6 @@ h1 {
 h1 span {
   color: #16816d;
 }
-.lead {
-  color: #687670;
-  font-size: 18px;
-}
-.connection,
 form,
 .list-header {
   display: flex;
@@ -112,10 +115,22 @@ form,
   gap: 10px;
   flex-wrap: wrap;
 }
-.connection {
-  margin-top: 28px;
+.api-endpoint {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  color: #687670;
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
-.api-url-label,
+.api-url-label {
+  color: #16816d;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
 label {
   color: #687670;
   font-size: 13px;
@@ -134,11 +149,6 @@ input {
 input:focus {
   border-color: #16816d;
   box-shadow: 0 0 0 4px #16816d22;
-}
-#api-url {
-  width: min(390px, 100%);
-  font-size: 13px;
-  color: #687670;
 }
 .button {
   border: 0;
@@ -159,6 +169,20 @@ input:focus {
 .secondary {
   background: #e2eee8;
   color: #245548;
+}
+.logout-button {
+  flex-shrink: 0;
+  border: 1px solid #0f5548;
+  background: #176856;
+  color: #fff;
+  box-shadow: 0 4px 12px #17685626;
+}
+.logout-button:hover {
+  background: #0f5548;
+}
+.logout-button:focus-visible {
+  outline: 3px solid #79c9a8;
+  outline-offset: 3px;
 }
 .panel {
   border: 1px solid #e2ebe5;
@@ -200,18 +224,85 @@ form input {
   min-height: 22px;
   color: #16816d;
 }
-#todo-list {
+.board-hint {
+  margin: 16px 0 0;
+  color: #687670;
+  font-size: 13px;
+}
+.kanban-board {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.kanban-column {
+  min-width: 0;
+  min-height: 240px;
+  padding: 16px;
+  border: 1px solid #e2ebe5;
+  border-radius: 18px;
+  background: #f4f8f5;
+  transition:
+    background-color 150ms,
+    border-color 150ms;
+}
+.kanban-column.is-drop-target {
+  border-color: #16816d;
+  background: #e5f3ec;
+}
+.column-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.column-heading h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.column-count {
+  min-width: 28px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #e2eee8;
+  color: #245548;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+.column-cards {
+  display: grid;
+  align-content: start;
   gap: 10px;
 }
 .todo {
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  gap: 14px;
   padding: 16px;
   border: 1px solid #e7eee9;
   border-radius: 15px;
-  background: #fbfdfb;
+  background: #fff;
+  cursor: grab;
+  touch-action: pan-y;
+  box-shadow: 0 4px 12px #1b44350b;
+}
+.todo:active {
+  cursor: grabbing;
+}
+.todo.is-dragging {
+  opacity: 0.5;
+}
+.touch-drag-preview {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  opacity: 0.92;
+  box-shadow: 0 18px 36px #17212b40;
+}
+.todo-details {
+  min-width: 0;
 }
 .todo-title {
   margin: 0;
@@ -225,12 +316,12 @@ form input {
 }
 .todo-actions {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
-.empty {
-  padding: 28px;
-  color: #89958f;
-  text-align: center;
+.todo-actions .button {
+  padding: 9px 12px;
 }
 @media (max-width: 680px) {
   .shell {
@@ -250,6 +341,16 @@ form input {
   }
   .todo {
     align-items: flex-start;
-    flex-direction: column;
+  }
+  .kanban-board {
+    grid-auto-columns: minmax(260px, 80%);
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scroll-snap-type: x mandatory;
+  }
+  .kanban-column {
+    scroll-snap-align: start;
   }
 }

@@ -25,7 +25,7 @@
             <p class="eyebrow">WELCOME BACK</p>
             <h2 id="login-heading">登録済みの方</h2>
             <p>登録済みのパスキーでログインします。</p>
-            <button id="login-passkey" type="button" class="button secondary">ログイン</button>
+            <button id="login-passkey" type="button" class="button primary">ログイン</button>
           </section>
         </div>
         <p id="auth-status" class="auth-status" role="status" aria-live="polite"></p>
@@ -34,14 +34,13 @@
     <main id="todo-app" class="shell" hidden>
       <header class="hero">
         <div class="hero-top">
-          <p class="eyebrow">KYoya67 TODO API</p>
-          <button id="logout-button" type="button" class="button secondary">ログアウト</button>
-        </div>
-        <p class="lead">シンプルな画面からTODO APIを操作できます。</p>
-        <div class="connection">
-          <span class="api-url-label">API URL</span><output id="api-url"></output
-          ><button id="health-button" class="button secondary">接続確認</button
-          ><span id="health-status">未確認</span>
+          <div>
+            <h1 class="hero-title">Kyoya67 TODO</h1>
+            <p class="api-endpoint">
+              <span class="api-url-label">API URL</span><output id="api-url"></output>
+            </p>
+          </div>
+          <button id="logout-button" type="button" class="button logout-button">ログアウト</button>
         </div>
       </header>
       <section class="panel composer">
@@ -50,18 +49,15 @@
           <h2>新しいTODOを追加</h2>
         </div>
         <form id="todo-form">
-          <input id="title" required maxlength="200" placeholder="例：牛乳を買う" /><button
-            class="button primary"
-          >
-            追加する
-          </button>
+          <input id="title" required maxlength="200" placeholder="例：牛乳を買う" />
+          <button class="button primary">追加する</button>
         </form>
       </section>
       <section class="panel list-panel">
         <div class="list-header">
           <div>
             <p class="eyebrow">YOUR LIST</p>
-            <h2>TODO一覧</h2>
+            <h2>TODOボード</h2>
           </div>
         </div>
         <form id="search-form" class="search-form">
@@ -70,7 +66,7 @@
           <button class="button secondary">検索</button>
         </form>
         <p id="message" role="status"></p>
-        <div id="todo-list"></div>
+        <div id="todo-list" class="kanban-board"></div>
       </section>
     </main>
     <script src="./app.js"></script>

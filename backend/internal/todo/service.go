@@ -11,20 +11,24 @@ import (
 )
 
 var (
-	ErrInvalidTitle = errors.New("title must not be empty")
-	ErrInvalidPage  = errors.New("invalid pagination")
-	ErrNotFound     = errors.New("todo not found")
+	ErrInvalidTitle  = errors.New("title must not be empty")
+	ErrInvalidStatus = errors.New("invalid todo status")
+	ErrInvalidPage   = errors.New("invalid pagination")
+	ErrNotFound      = errors.New("todo not found")
 )
 
 const (
 	defaultTodoLimit int32 = 100
 	maxTodoLimit     int32 = 1000
+	StatusNotStarted       = "not_started"
+	StatusInProgress       = "in_progress"
+	StatusCompleted        = "completed"
 )
 
 type todoRepository interface {
-	Create(context.Context, [16]byte, string) (sqlc.Todo, error)
+	Create(context.Context, [16]byte, string, string) (sqlc.Todo, error)
 	List(context.Context, [16]byte, string, int32, int32) ([]sqlc.Todo, error)
-	Update(context.Context, [16]byte, int64, string) (sqlc.Todo, error)
+	Update(context.Context, [16]byte, int64, string, string) (sqlc.Todo, error)
 	Delete(context.Context, [16]byte, int64) error
 }
 
@@ -36,12 +40,27 @@ func NewService(repository todoRepository) *Service {
 	return &Service{repository: repository}
 }
 
-func (s *Service) Create(ctx context.Context, userID [16]byte, title string) error {
-	if strings.TrimSpace(title) == "" {
-		return ErrInvalidTitle
+func normalizeStatus(status string) (string, error) {
+	if status == "" {
+		return StatusNotStarted, nil
 	}
-	_, err := s.repository.Create(ctx, userID, title)
-	return err
+	switch status {
+	case StatusNotStarted, StatusInProgress, StatusCompleted:
+		return status, nil
+	default:
+		return "", ErrInvalidStatus
+	}
+}
+
+func (s *Service) Create(ctx context.Context, userID [16]byte, title, status string) (sqlc.Todo, error) {
+	if strings.TrimSpace(title) == "" {
+		return sqlc.Todo{}, ErrInvalidTitle
+	}
+	status, err := normalizeStatus(status)
+	if err != nil {
+		return sqlc.Todo{}, err
+	}
+	return s.repository.Create(ctx, userID, title, status)
 }
 
 func (s *Service) List(ctx context.Context, userID [16]byte, title string, limit, offset int32) ([]sqlc.Todo, error) {
@@ -55,15 +74,20 @@ func (s *Service) List(ctx context.Context, userID [16]byte, title string, limit
 	return s.repository.List(ctx, userID, title, limit, offset)
 }
 
-func (s *Service) Update(ctx context.Context, userID [16]byte, id int64, title string) error {
+func (s *Service) Update(ctx context.Context, userID [16]byte, id int64, title, status string) (sqlc.Todo, error) {
 	if strings.TrimSpace(title) == "" {
-		return ErrInvalidTitle
+		return sqlc.Todo{}, ErrInvalidTitle
 	}
-	_, err := s.repository.Update(ctx, userID, id, title)
+	if status != "" {
+		if _, err := normalizeStatus(status); err != nil {
+			return sqlc.Todo{}, err
+		}
+	}
+	todo, err := s.repository.Update(ctx, userID, id, title, status)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
+		return sqlc.Todo{}, ErrNotFound
 	}
-	return err
+	return todo, err
 }
 
 func (s *Service) Delete(ctx context.Context, userID [16]byte, id int64) error {

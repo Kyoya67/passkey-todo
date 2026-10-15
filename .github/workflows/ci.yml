@@ -153,3 +153,7 @@ jobs:
       - name: Check frontend format
         working-directory: frontend
         run: npm run format:check
+
+      - name: Test frontend interactions
+        working-directory: frontend
+        run: npm test

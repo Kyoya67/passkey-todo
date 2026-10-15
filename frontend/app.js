@@ -184,20 +184,99 @@ const escapeHTML = (value) =>
     /[&<>'"]/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]
   );
+const columns = [
+  { status: 'not_started', label: '未着手' },
+  { status: 'in_progress', label: '進行中' },
+  { status: 'completed', label: '完了' },
+];
+let currentTodos = new Map();
+let draggedTodoID = null;
+let statusBusy = false;
+let touchDrag = null;
+
+const renderCard = (todo) => `
+  <article class="todo" data-id="${escapeHTML(todo.id)}" draggable="true">
+    <div class="todo-details">
+      <p class="todo-title">${escapeHTML(todo.title)}</p>
+      <p class="todo-meta">更新：${new Date(todo.updatedAt).toLocaleString('ja-JP')}</p>
+    </div>
+    <div class="todo-actions">
+      <button class="button secondary edit" type="button">編集</button>
+      <button class="button secondary delete" type="button">削除</button>
+    </div>
+  </article>`;
+
+const renderBoard = (todos) => {
+  currentTodos = new Map(todos.map((todo) => [String(todo.id), todo]));
+  list.innerHTML = columns
+    .map(({ status, label }) => {
+      const cards = todos.filter((todo) => todo.status === status);
+      return `<section class="kanban-column" data-status="${status}" aria-label="${label}">
+        <div class="column-heading"><h3>${label}</h3><span class="column-count">${cards.length}</span></div>
+        <div class="column-cards">${cards.map(renderCard).join('')}</div>
+      </section>`;
+    })
+    .join('');
+};
+
+const clearDrag = () => {
+  draggedTodoID = null;
+  list.querySelectorAll('.is-drop-target, .is-dragging').forEach((element) => {
+    element.classList.remove('is-drop-target', 'is-dragging');
+  });
+};
+
+const highlightColumn = (column) => {
+  list.querySelectorAll('.is-drop-target').forEach((target) => {
+    if (target !== column) target.classList.remove('is-drop-target');
+  });
+  column?.classList.add('is-drop-target');
+};
+
+const clearTouchDrag = () => {
+  if (!touchDrag) return;
+  clearTimeout(touchDrag.timer);
+  touchDrag.ghost?.remove();
+  touchDrag.card.classList.remove('is-dragging');
+  if (touchDrag.card.hasPointerCapture?.(touchDrag.pointerId)) {
+    touchDrag.card.releasePointerCapture(touchDrag.pointerId);
+  }
+  highlightColumn(null);
+  touchDrag = null;
+};
+
+const updateStatus = async (id, status) => {
+  const todo = currentTodos.get(String(id));
+  if (!todo || todo.status === status || statusBusy) return;
+  statusBusy = true;
+  list.setAttribute('aria-busy', 'true');
+  try {
+    const updated = await request(`/todos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ title: todo.title, status }),
+    });
+    currentTodos.set(String(id), { ...todo, ...updated, status });
+    if (await load()) show('状態を更新しました');
+    else if (!todoApp.hidden) renderBoard([...currentTodos.values()]);
+  } catch (error) {
+    if (error.status === 401) {
+      showAuth('セッションが切れました。パスキーでログインしてください。');
+    } else {
+      show(`状態の更新に失敗しました（${error.message}）`, true);
+      renderBoard([...currentTodos.values()]);
+    }
+  } finally {
+    statusBusy = false;
+    list.removeAttribute('aria-busy');
+  }
+};
 async function load() {
   try {
     const title = searchTitle.value.trim();
     const query = title ? `?${new URLSearchParams({ title })}` : '';
     const data = await request(`/todos${query}`);
     const todos = data.todos || [];
-    list.innerHTML = todos.length
-      ? todos
-          .map(
-            (todo) =>
-              `<article class="todo" data-id="${todo.id}"><div><p class="todo-title">${escapeHTML(todo.title)}</p><p class="todo-meta">更新：${new Date(todo.updatedAt).toLocaleString('ja-JP')}</p></div><div class="todo-actions"><button class="button secondary edit">編集</button><button class="button secondary delete">削除</button></div></article>`
-          )
-          .join('')
-      : '<div class="empty">TODOはまだありません。</div>';
+    renderBoard(todos);
     return true;
   } catch (error) {
     list.replaceChildren();
@@ -232,6 +311,94 @@ document.querySelector('#todo-form').addEventListener('submit', async (event) =>
     show(`追加に失敗しました（${error.message}）`, true);
   }
 });
+list.addEventListener('dragstart', (event) => {
+  const item = event.target.closest('.todo');
+  if (!item || event.target.closest('button, input') || statusBusy || touchDrag?.active) {
+    event.preventDefault();
+    return;
+  }
+  draggedTodoID = item.dataset.id;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', draggedTodoID);
+  item.classList.add('is-dragging');
+});
+list.addEventListener('dragover', (event) => {
+  const column = event.target.closest('.kanban-column');
+  if (!column || !draggedTodoID || statusBusy) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  highlightColumn(column);
+});
+list.addEventListener('drop', async (event) => {
+  const column = event.target.closest('.kanban-column');
+  if (!column || !draggedTodoID) return;
+  event.preventDefault();
+  const id = draggedTodoID;
+  clearDrag();
+  await updateStatus(id, column.dataset.status);
+});
+list.addEventListener('dragend', clearDrag);
+list.addEventListener('dragleave', (event) => {
+  const column = event.target.closest('.kanban-column');
+  if (column && !column.contains(event.relatedTarget)) column.classList.remove('is-drop-target');
+});
+list.addEventListener('pointerdown', (event) => {
+  if (event.pointerType !== 'touch' || statusBusy || event.target.closest('button, input')) return;
+  const card = event.target.closest('.todo');
+  if (!card) return;
+  clearTouchDrag();
+  touchDrag = {
+    pointerId: event.pointerId,
+    id: card.dataset.id,
+    card,
+    startX: event.clientX,
+    startY: event.clientY,
+    active: false,
+    ghost: null,
+    timer: null,
+  };
+  touchDrag.timer = setTimeout(() => {
+    if (!touchDrag || touchDrag.pointerId !== event.pointerId) return;
+    touchDrag.active = true;
+    card.classList.add('is-dragging');
+    const ghost = card.cloneNode(true);
+    ghost.classList.add('touch-drag-preview');
+    ghost.setAttribute('aria-hidden', 'true');
+    ghost.style.width = `${card.getBoundingClientRect().width}px`;
+    ghost.style.left = `${event.clientX}px`;
+    ghost.style.top = `${event.clientY}px`;
+    document.body.append(ghost);
+    touchDrag.ghost = ghost;
+    card.setPointerCapture?.(event.pointerId);
+  }, 250);
+});
+window.addEventListener('pointermove', (event) => {
+  if (!touchDrag || event.pointerId !== touchDrag.pointerId) return;
+  if (!touchDrag.active) {
+    if (Math.hypot(event.clientX - touchDrag.startX, event.clientY - touchDrag.startY) > 10) {
+      clearTouchDrag();
+    }
+    return;
+  }
+  event.preventDefault();
+  touchDrag.ghost.style.left = `${event.clientX}px`;
+  touchDrag.ghost.style.top = `${event.clientY}px`;
+  highlightColumn(
+    document.elementFromPoint(event.clientX, event.clientY)?.closest('.kanban-column')
+  );
+});
+window.addEventListener('pointerup', async (event) => {
+  if (!touchDrag || event.pointerId !== touchDrag.pointerId) return;
+  const { active, id } = touchDrag;
+  const column = active
+    ? document.elementFromPoint(event.clientX, event.clientY)?.closest('.kanban-column')
+    : null;
+  clearTouchDrag();
+  if (column) await updateStatus(id, column.dataset.status);
+});
+window.addEventListener('pointercancel', (event) => {
+  if (touchDrag?.pointerId === event.pointerId) clearTouchDrag();
+});
 list.addEventListener('click', async (event) => {
   const item = event.target.closest('.todo');
   if (!item) return;
@@ -264,18 +431,6 @@ list.addEventListener('click', async (event) => {
     if (error.status === 401)
       return showAuth('セッションが切れました。パスキーでログインしてください。');
     show(`操作に失敗しました（${error.message}）`, true);
-  }
-});
-document.querySelector('#health-button').addEventListener('click', async () => {
-  const status = document.querySelector('#health-status');
-  status.textContent = '確認中…';
-  try {
-    await request('/health');
-    status.textContent = '接続OK';
-    status.style.color = '#16816d';
-  } catch {
-    status.textContent = '接続失敗';
-    status.style.color = '#c34e4e';
   }
 });
 document.querySelector('#logout-button').addEventListener('click', async (event) => {
