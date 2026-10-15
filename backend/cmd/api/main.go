@@ -56,7 +56,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("configure WebAuthn: %v", err)
 	}
-	authService := auth.NewService(verifier, auth.NewRepository(pool), auth.NewChallengeStore(redisClient))
+	authRepository := auth.NewRepository(pool)
+	challengeStore := auth.NewChallengeStore(redisClient)
+	authService := auth.NewService(verifier, authRepository, challengeStore)
 	authHandler := auth.NewHandler(authService, cfg.WebAuthnOrigin)
 	router.Register(e, todoHandler, authHandler)
 
