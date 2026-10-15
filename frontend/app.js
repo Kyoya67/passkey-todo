@@ -240,10 +240,10 @@ const animateLayout = (previousPositions) => {
     const x = previous.left - current.left;
     const y = previous.top - current.top;
     if (Math.abs(x) < 1 && Math.abs(y) < 1) continue;
-    card.animate(
-      [{ transform: `translate(${x}px, ${y}px)` }, { transform: 'translate(0, 0)' }],
-      { duration: 260, easing: 'cubic-bezier(0.2, 0.75, 0.25, 1)' }
-    );
+    card.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: 'translate(0, 0)' }], {
+      duration: 260,
+      easing: 'cubic-bezier(0.2, 0.75, 0.25, 1)',
+    });
   }
 };
 
@@ -261,7 +261,10 @@ const renderCard = (todo, rank = null) => `
 
 const renderBoard = (todos) => {
   const previousPositions = new Map(
-    [...list.querySelectorAll('.todo')].map((card) => [card.dataset.id, card.getBoundingClientRect()])
+    [...list.querySelectorAll('.todo')].map((card) => [
+      card.dataset.id,
+      card.getBoundingClientRect(),
+    ])
   );
   currentTodos = new Map(todos.map((todo) => [String(todo.id), todo]));
   list.innerHTML = columns
@@ -316,7 +319,10 @@ const reorderDuringDrag = (card, target, after) => {
   if (card.parentElement !== parent) return; // Cross-group moves are persisted on drop.
   if (after ? target.nextElementSibling === card : card.nextElementSibling === target) return;
   const before = new Map(
-    [...parent.querySelectorAll('.todo')].map((element) => [element, element.getBoundingClientRect()])
+    [...parent.querySelectorAll('.todo')].map((element) => [
+      element,
+      element.getBoundingClientRect(),
+    ])
   );
   parent.insertBefore(card, after ? target.nextSibling : target);
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
@@ -326,10 +332,10 @@ const reorderDuringDrag = (card, target, after) => {
     const dy = previous.top - current.top;
     if (Math.abs(dy) < 1) continue;
     element.getAnimations?.().forEach((animation) => animation.cancel());
-    element.animate(
-      [{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }],
-      { duration: 200, easing: 'cubic-bezier(0.2, 0.75, 0.25, 1)' }
-    );
+    element.animate([{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }], {
+      duration: 200,
+      easing: 'cubic-bezier(0.2, 0.75, 0.25, 1)',
+    });
   }
 };
 
@@ -367,13 +373,20 @@ const highlightPosition = (target, id, clientY) => {
     }
   }
   const placement = card
-    ? { sourceID: String(id), status: todo.status, level: priorityLevel(todo), targetID: card.dataset.id, after }
+    ? {
+        sourceID: String(id),
+        status: todo.status,
+        level: priorityLevel(todo),
+        targetID: card.dataset.id,
+        after,
+      }
     : null;
   if (
     dragPlacement?.targetID === placement?.targetID &&
     dragPlacement?.after === placement?.after &&
     dragPlacement?.sourceID === placement?.sourceID
-  ) return;
+  )
+    return;
   list.querySelectorAll('.is-drop-before, .is-drop-after').forEach((item) => {
     item.classList.remove('is-drop-before', 'is-drop-after');
   });

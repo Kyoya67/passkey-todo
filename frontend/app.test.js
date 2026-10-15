@@ -7,7 +7,12 @@ const app = fs.readFileSync(require.resolve('./app.js'), 'utf8');
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
-function setup({ failUpdate = false, savedTheme = null, trackLayout = false, reducedMotion = false } = {}) {
+function setup({
+  failUpdate = false,
+  savedTheme = null,
+  trackLayout = false,
+  reducedMotion = false,
+} = {}) {
   const listeners = {};
   const windowListeners = {};
   const calls = [];
@@ -147,9 +152,12 @@ function setup({ failUpdate = false, savedTheme = null, trackLayout = false, red
               item.id !== id
           )
           .sort((a, b) => a.priority - b.priority);
-        const index = beforeId === null ? group.length : group.findIndex((item) => item.id === beforeId);
+        const index =
+          beforeId === null ? group.length : group.findIndex((item) => item.id === beforeId);
         group.splice(index, 0, moving);
-        group.forEach((item, position) => { item.priority = position + 1; });
+        group.forEach((item, position) => {
+          item.priority = position + 1;
+        });
         return { ok: true, status: 204 };
       }
       if (options.method === 'PUT') {
@@ -356,7 +364,9 @@ test('sorting updates layout immediately and animates displaced cards', async ()
     preventDefault() {},
   });
   assert.match(list.innerHTML, /data-id="4"[\s\S]*data-id="1"/);
-  assert.ok(animations.some(({ id, frames }) => id === '4' && frames[0].transform !== 'translate(0, 0)'));
+  assert.ok(
+    animations.some(({ id, frames }) => id === '4' && frames[0].transform !== 'translate(0, 0)')
+  );
   await drop;
 });
 

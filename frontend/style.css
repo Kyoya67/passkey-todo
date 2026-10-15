@@ -422,8 +422,12 @@ form input {
   pointer-events: none;
 }
 
-.todo.is-drop-before::before { top: -7px; }
-.todo.is-drop-after::after { bottom: -7px; }
+.todo.is-drop-before::before {
+  top: -7px;
+}
+.todo.is-drop-after::after {
+  bottom: -7px;
+}
 @media (prefers-reduced-motion: reduce) {
   .todo {
     transition: none;
