@@ -16,6 +16,8 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 `handler.go`と`service.go`では、単一のHandler・Serviceによる登録とログインをテストする。discoverable credentialでのログイン開始、ログインIDの使い捨て、ユーザーハンド照合、合成署名を使った実WebAuthn検証、失敗時のCookie非発行、Origin制限、Cookie属性を確認する。テストケースも`handler_test.go`と`service_test.go`にまとめている。`store.go`は`store_test.go`でFake Redisと実RedisによるTTL、キーの消費、セッション保存を確認する。`repository.go`ではCredentialの検索・更新もテストする。ログイン全体の実DB統合テストと端末の実パスキーによるブラウザ確認は未実施。
 
+ログイン失敗時はHandlerが入力解析とService検証の段階を固定ラベルで記録すること、Serviceが拒否理由を機密値なしで分類すること、クライアントやログに内部エラーとセッショントークンが出ないことを確認する。
+
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
 | webauthn.go | NewWebAuthn | 100.0% |
@@ -37,10 +39,14 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 |  | Save | 0.0% |
 |  | Consume | 0.0% |
 | handler.go | BeginLogin | 88.9% |
-|  | FinishLogin | 88.5% |
+|  | FinishLogin | 82.9% |
 | service.go | WithLogin | 100.0% |
+|  | Error | 0.0% |
+|  | Unwrap | 100.0% |
+|  | rejectLogin | 100.0% |
+|  | loginReason | 100.0% |
 |  | BeginLogin | 91.7% |
-|  | FinishLogin | 94.3% |
+|  | FinishLogin | 93.0% |
 |  | WebAuthnID | 100.0% |
 |  | WebAuthnName | 0.0% |
 |  | WebAuthnDisplayName | 0.0% |

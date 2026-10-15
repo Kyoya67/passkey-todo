@@ -129,6 +129,22 @@ func (u registrationUser) WebAuthnCredentials() []webauthn.Credential { return n
 
 var ErrInvalidLogin = errors.New("invalid or expired login")
 
+// loginRejection carries only a fixed diagnostic label; never include credential data.
+type loginRejection struct{ reason string }
+
+func (e loginRejection) Error() string { return ErrInvalidLogin.Error() }
+func (e loginRejection) Unwrap() error { return ErrInvalidLogin }
+
+func rejectLogin(reason string) error { return loginRejection{reason: reason} }
+
+func loginReason(err error) string {
+	var rejection loginRejection
+	if errors.As(err, &rejection) {
+		return rejection.reason
+	}
+	return "invalid_or_expired_challenge"
+}
+
 type loginVerifier interface {
 	BeginDiscoverableLogin(...webauthn.LoginOption) (*protocol.CredentialAssertion, *webauthn.SessionData, error)
 	ValidatePasskeyLogin(webauthn.DiscoverableUserHandler, webauthn.SessionData, *protocol.ParsedCredentialAssertionData) (webauthn.User, *webauthn.Credential, error)
@@ -170,16 +186,20 @@ func (s *Service) BeginLogin(ctx context.Context) (string, *protocol.CredentialA
 func (s *Service) FinishLogin(ctx context.Context, token string, response *protocol.ParsedCredentialAssertionData) (string, error) {
 	decoded, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil || len(decoded) != 32 || response == nil {
-		return "", ErrInvalidLogin
+		return "", rejectLogin("invalid_login_id_or_response")
 	}
 	session, err := s.challenges.Consume(ctx, sha256.Sum256(decoded))
 	if err != nil {
+		if errors.Is(err, ErrInvalidLogin) {
+			return "", rejectLogin("challenge_not_found_or_used")
+		}
 		return "", fmt.Errorf("load login challenge: %w", err)
 	}
 	if !session.Expires.After(time.Now()) || len(session.UserID) != 0 {
-		return "", ErrInvalidLogin
+		return "", rejectLogin("invalid_or_expired_challenge")
 	}
 	var lookupErr error
+	userHandleMismatch := false
 	lookup := func(rawID, userHandle []byte) (webauthn.User, error) {
 		id, credential, err := s.loginAccounts.FindCredential(ctx, rawID)
 		if err != nil {
@@ -187,6 +207,7 @@ func (s *Service) FinishLogin(ctx context.Context, token string, response *proto
 			return nil, err
 		}
 		if !bytes.Equal(id[:], userHandle) {
+			userHandleMismatch = true
 			return nil, ErrInvalidLogin
 		}
 		return loginUser{id: id, credential: credential}, nil
@@ -195,12 +216,18 @@ func (s *Service) FinishLogin(ctx context.Context, token string, response *proto
 	if lookupErr != nil && !errors.Is(lookupErr, pgx.ErrNoRows) {
 		return "", fmt.Errorf("lookup login credential: %w", lookupErr)
 	}
+	if errors.Is(lookupErr, pgx.ErrNoRows) {
+		return "", rejectLogin("credential_not_found")
+	}
+	if userHandleMismatch {
+		return "", rejectLogin("user_handle_mismatch")
+	}
 	if err != nil || user == nil || credential == nil {
-		return "", ErrInvalidLogin
+		return "", rejectLogin("webauthn_verification_failed")
 	}
 	userID := user.WebAuthnID()
 	if len(userID) != 16 || !bytes.Equal(credential.ID, response.RawID) {
-		return "", ErrInvalidLogin
+		return "", rejectLogin("credential_id_mismatch")
 	}
 	var id [16]byte
 	copy(id[:], userID)

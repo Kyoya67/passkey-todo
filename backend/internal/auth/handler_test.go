@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -237,6 +238,8 @@ func TestLoginHandlerFinish(t *testing.T) {
 	service := &fakeLoginServiceAPI{token: "session-token"}
 	h := NewHandler(nil, service, "http://localhost:3000")
 	e := echo.New()
+	var logs bytes.Buffer
+	e.Logger.SetOutput(&logs)
 	e.POST("/finish", h.FinishLogin)
 	request := httptest.NewRequest(http.MethodPost, "/finish", strings.NewReader(string(body)))
 	request.Header.Set(echo.HeaderOrigin, "http://localhost:3000")
@@ -259,6 +262,9 @@ func TestLoginHandlerFinish(t *testing.T) {
 	e.ServeHTTP(res, bad)
 	if res.Code != 400 || len(res.Result().Cookies()) != 0 {
 		t.Fatalf("failure issued session: %d", res.Code)
+	}
+	if !strings.Contains(logs.String(), "stage=verification reason=invalid_or_expired_challenge") {
+		t.Fatalf("missing safe rejection label: %s", logs.String())
 	}
 
 	for _, tc := range []struct {
@@ -295,5 +301,8 @@ func TestLoginHandlerFinish(t *testing.T) {
 	secureEcho.ServeHTTP(secureRes, secureReq)
 	if secureRes.Code != 204 || len(secureRes.Result().Cookies()) != 1 || !secureRes.Result().Cookies()[0].Secure {
 		t.Fatalf("cloud cookie must be secure: %d", secureRes.Code)
+	}
+	if strings.Contains(logs.String(), "private secret") || strings.Contains(logs.String(), "session-token") {
+		t.Fatal("sensitive value appeared in login logs")
 	}
 }

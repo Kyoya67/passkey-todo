@@ -266,6 +266,8 @@ Issue #11ではCognitoを使わず、既存のGoバックエンドでWebAuthnに
 
 登録とログインのHandlerは`internal/auth/handler.go`の単一の`Handler`、Serviceは`internal/auth/service.go`の単一の`Service`にまとめる。ログイン固有の検証器・チャレンジ・セッションは`WithLogin`でServiceへ渡し、PostgreSQLのRepositoryを共有する。Redis保存処理は`store.go`に置く。テストも各実装ファイルに対応する`handler_test.go`、`service_test.go`、`store_test.go`にまとめる。
 
+ログイン完了のHTTP 400は入力の不正とWebAuthn検証失敗の両方で返る。原因を切り分けられるよう、バックエンドログには処理段階と固定の拒否理由だけを記録し、署名・チャレンジ・ユーザーハンド・セッショントークンやライブラリの生エラーは記録しない。クライアントへのエラー応答も詳細を公開しない。
+
 #### パスキー登録の責務分担
 
 | 対象 | 責務 |

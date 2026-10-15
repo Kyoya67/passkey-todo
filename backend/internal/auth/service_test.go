@@ -415,6 +415,14 @@ func TestLoginFailureDoesNotCreateSession(t *testing.T) {
 			if mode == "unknown credential" && !errors.Is(err, ErrInvalidLogin) {
 				t.Fatalf("wrong error: %v", err)
 			}
+			if want, ok := map[string]string{
+				"unknown credential": "credential_not_found",
+				"wrong user handle":  "user_handle_mismatch",
+				"bad signature":      "webauthn_verification_failed",
+				"expired":            "invalid_or_expired_challenge",
+			}[mode]; ok && loginReason(err) != want {
+				t.Fatalf("reason %q, want %q", loginReason(err), want)
+			}
 		})
 	}
 }
