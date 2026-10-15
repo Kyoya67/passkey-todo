@@ -1,6 +1,7 @@
 package todo
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -165,6 +166,46 @@ func TestHandlerUpdateAndDelete(t *testing.T) {
 			}
 			if response.Code != test.want && !(test.name == "invalid title" && response.Code == http.StatusServiceUnavailable) {
 				t.Fatalf("status=%d want=%d", response.Code, test.want)
+			}
+		})
+	}
+}
+
+func TestHandlerServiceFailureLogging(t *testing.T) {
+	privateErr := errors.New("private SQL detail")
+	service := &fakeService{
+		createFn: func(context.Context, string) error { return privateErr },
+		listFn: func(context.Context, string, int32, int32) ([]sqlc.Todo, error) {
+			return nil, privateErr
+		},
+		updateFn: func(context.Context, int64, string) error { return privateErr },
+		deleteFn: func(context.Context, int64) error { return privateErr },
+	}
+	handler := NewHandler(service)
+	for _, tc := range []struct {
+		operation, method, target, body string
+		call                            func(echo.Context) error
+	}{
+		{"create", http.MethodPost, "/todos", `{"title":"private title"}`, handler.CreateTodo},
+		{"list", http.MethodGet, "/todos", "", func(c echo.Context) error { return handler.ListTodos(c, openapi.ListTodosParams{}) }},
+		{"update", http.MethodPut, "/todos/1", `{"title":"private title"}`, func(c echo.Context) error { return handler.UpdateTodo(c, 1) }},
+		{"delete", http.MethodDelete, "/todos/1", "", func(c echo.Context) error { return handler.DeleteTodo(c, 1) }},
+	} {
+		t.Run(tc.operation, func(t *testing.T) {
+			ctx, response := newHandlerContext(tc.method, tc.target, tc.body)
+			var logs bytes.Buffer
+			ctx.Echo().Logger.SetOutput(&logs)
+			if err := tc.call(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if response.Code != http.StatusServiceUnavailable || response.Body.Len() != 0 {
+				t.Fatalf("status=%d body=%q", response.Code, response.Body.String())
+			}
+			if !strings.Contains(logs.String(), "operation="+tc.operation+" stage=service") {
+				t.Fatalf("missing diagnostic label: %q", logs.String())
+			}
+			if strings.Contains(logs.String(), "private") {
+				t.Fatalf("sensitive data leaked to logs: %q", logs.String())
 			}
 		})
 	}

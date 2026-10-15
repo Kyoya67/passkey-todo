@@ -90,14 +90,15 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 ## internal/todo
 
-`handler_test.go`では、Fake Serviceを差し替え、HTTPリクエストのバインド、レスポンスJSON、ステータスコード、サービスエラーのHTTP変換、TODOのレスポンス変換をテストしている。
+`handler_test.go`では、Fake Serviceを差し替え、HTTPリクエストのバインド、レスポンスJSON、ステータスコード、サービスエラーのHTTP変換、TODOのレスポンス変換をテストしている。503では操作名だけをログに残し、タイトルやDBエラー本文を漏らさないことも確認する。
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
 | handler.go | NewHandler | 100.0% |
+|  | serviceUnavailable | 100.0% |
 |  | GetHealth | 100.0% |
 |  | CreateTodo | 100.0% |
-|  | ListTodos | 88.2% |
+|  | ListTodos | 94.1% |
 |  | UpdateTodo | 90.9% |
 |  | DeleteTodo | 100.0% |
 |  | toTodo | 100.0% |
@@ -119,7 +120,7 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 |  | List | 100.0% |
 |  | Update | 100.0% |
 |  | Delete | 100.0% |
-| **パッケージ合計（単体テスト）** |  | **92.9%** |
+| **パッケージ合計（単体テスト）** |  | **94.4%** |
 
 ## internal/todo（統合テスト）
 

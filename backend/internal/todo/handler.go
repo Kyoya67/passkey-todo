@@ -20,6 +20,13 @@ type todoService interface {
 
 type Handler struct{ service todoService }
 
+// serviceUnavailable records only the operation and failure stage. The raw error
+// may contain SQL details or input data, so it must not be logged or returned.
+func serviceUnavailable(c echo.Context, operation string) error {
+	c.Logger().Errorf("todo request failed: operation=%s stage=service", operation)
+	return c.NoContent(http.StatusServiceUnavailable)
+}
+
 func NewHandler(service todoService) *Handler {
 	return &Handler{service: service}
 }
@@ -37,7 +44,7 @@ func (h *Handler) CreateTodo(c echo.Context) error {
 		if errors.Is(err, ErrInvalidTitle) {
 			return c.NoContent(http.StatusBadRequest)
 		}
-		return c.NoContent(http.StatusServiceUnavailable)
+		return serviceUnavailable(c, "create")
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -59,7 +66,7 @@ func (h *Handler) ListTodos(c echo.Context, params openapi.ListTodosParams) erro
 		return c.NoContent(http.StatusBadRequest)
 	}
 	if err != nil {
-		return c.NoContent(http.StatusServiceUnavailable)
+		return serviceUnavailable(c, "list")
 	}
 	response := openapi.TodoListResponse{Todos: make([]openapi.Todo, 0, len(todos))}
 	for _, todo := range todos {
@@ -81,7 +88,7 @@ func (h *Handler) UpdateTodo(c echo.Context, id openapi.TodoID) error {
 		return c.NoContent(http.StatusNotFound)
 	}
 	if err != nil {
-		return c.NoContent(http.StatusServiceUnavailable)
+		return serviceUnavailable(c, "update")
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -91,7 +98,7 @@ func (h *Handler) DeleteTodo(c echo.Context, id openapi.TodoID) error {
 		if errors.Is(err, ErrNotFound) {
 			return c.NoContent(http.StatusNotFound)
 		}
-		return c.NoContent(http.StatusServiceUnavailable)
+		return serviceUnavailable(c, "delete")
 	}
 	return c.NoContent(http.StatusNoContent)
 }
