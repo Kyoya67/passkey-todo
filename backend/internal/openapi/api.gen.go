@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	protocol "github.com/go-webauthn/webauthn/protocol"
 	"github.com/labstack/echo/v4"
 	"github.com/oapi-codegen/runtime"
 )
@@ -23,6 +24,33 @@ import (
 type HealthResponse struct {
 	// Status Example: ok
 	Status string `json:"status"`
+}
+
+// LoginOptions defines model for LoginOptions.
+type LoginOptions struct {
+	// LoginId ログイン完了に必要なランダムトークン
+	LoginId string                       `json:"loginId"`
+	Options protocol.CredentialAssertion `json:"options"`
+}
+
+// LoginRequest defines model for LoginRequest.
+type LoginRequest struct {
+	Credential protocol.CredentialAssertionResponse `json:"credential"`
+	LoginId    string                               `json:"loginId"`
+}
+
+// RegistrationOptions defines model for RegistrationOptions.
+type RegistrationOptions struct {
+	Options WebAuthnCreationOptions `json:"options"`
+
+	// RegistrationId 登録完了に必要なランダムトークン。ログへ記録しない。
+	RegistrationId string `json:"registrationId"`
+}
+
+// RegistrationRequest defines model for RegistrationRequest.
+type RegistrationRequest struct {
+	Credential     WebAuthnCredential `json:"credential"`
+	RegistrationId string             `json:"registrationId"`
 }
 
 // Todo defines model for Todo.
@@ -50,6 +78,12 @@ type TodoRequest struct {
 	Title string `json:"title"`
 }
 
+// WebAuthnCreationOptions defines model for WebAuthnCreationOptions.
+type WebAuthnCreationOptions = protocol.CredentialCreation
+
+// WebAuthnCredential defines model for WebAuthnCredential.
+type WebAuthnCredential = protocol.CredentialCreationResponse
+
 // LimitQuery defines model for LimitQuery.
 type LimitQuery = int32
 
@@ -74,6 +108,12 @@ type ListTodosParams struct {
 	Offset *OffsetQuery `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// FinishLoginJSONRequestBody defines body for FinishLogin for application/json ContentType.
+type FinishLoginJSONRequestBody = LoginRequest
+
+// FinishRegistrationJSONRequestBody defines body for FinishRegistration for application/json ContentType.
+type FinishRegistrationJSONRequestBody = RegistrationRequest
+
 // CreateTodoJSONRequestBody defines body for CreateTodo for application/json ContentType.
 type CreateTodoJSONRequestBody = TodoRequest
 
@@ -82,6 +122,21 @@ type UpdateTodoJSONRequestBody = TodoRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// BeginLogin パスキーログインを開始
+	// (POST /auth/login/begin)
+	BeginLogin(ctx echo.Context) error
+	// FinishLogin パスキーログインを完了
+	// (POST /auth/login/finish)
+	FinishLogin(ctx echo.Context) error
+	// Logout ログアウト
+	// (POST /auth/logout)
+	Logout(ctx echo.Context) error
+	// BeginRegistration パスキー登録を開始
+	// (POST /auth/registration/begin)
+	BeginRegistration(ctx echo.Context) error
+	// FinishRegistration パスキー登録を完了
+	// (POST /auth/registration/finish)
+	FinishRegistration(ctx echo.Context) error
 	// GetHealth ヘルスチェック
 	// (GET /health)
 	GetHealth(ctx echo.Context) error
@@ -102,6 +157,51 @@ type ServerInterface interface {
 // ServerInterfaceWrapper converts echo contexts to parameters.
 type ServerInterfaceWrapper struct {
 	Handler ServerInterface
+}
+
+// BeginLogin converts echo context to params.
+func (w *ServerInterfaceWrapper) BeginLogin(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.BeginLogin(ctx)
+	return err
+}
+
+// FinishLogin converts echo context to params.
+func (w *ServerInterfaceWrapper) FinishLogin(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.FinishLogin(ctx)
+	return err
+}
+
+// Logout converts echo context to params.
+func (w *ServerInterfaceWrapper) Logout(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.Logout(ctx)
+	return err
+}
+
+// BeginRegistration converts echo context to params.
+func (w *ServerInterfaceWrapper) BeginRegistration(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.BeginRegistration(ctx)
+	return err
+}
+
+// FinishRegistration converts echo context to params.
+func (w *ServerInterfaceWrapper) FinishRegistration(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.FinishRegistration(ctx)
+	return err
 }
 
 // GetHealth converts echo context to params.
@@ -233,6 +333,11 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 		Handler: si,
 	}
 
+	router.POST(options.BaseURL+"/auth/registration/begin", wrapper.BeginRegistration, options.OperationMiddlewares["beginRegistration"]...)
+	router.POST(options.BaseURL+"/auth/registration/finish", wrapper.FinishRegistration, options.OperationMiddlewares["finishRegistration"]...)
+	router.POST(options.BaseURL+"/auth/login/begin", wrapper.BeginLogin, options.OperationMiddlewares["beginLogin"]...)
+	router.POST(options.BaseURL+"/auth/login/finish", wrapper.FinishLogin, options.OperationMiddlewares["finishLogin"]...)
+	router.POST(options.BaseURL+"/auth/logout", wrapper.Logout, options.OperationMiddlewares["logout"]...)
 	router.GET(options.BaseURL+"/health", wrapper.GetHealth, options.OperationMiddlewares["getHealth"]...)
 	router.GET(options.BaseURL+"/todos", wrapper.ListTodos, options.OperationMiddlewares["listTodos"]...)
 	router.POST(options.BaseURL+"/todos", wrapper.CreateTodo, options.OperationMiddlewares["createTodo"]...)
@@ -246,26 +351,53 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"1FdbTxtHFP4r0Wkft3gJNI32LSm9oEZNS8hTxMPEO8aT7o3dWRQLrcTu0mCKqyJUILRI9IICoQKiltya",
-	"Nvkxg234F9XMrM3aHodGSaX0JdqJ55zzne87l2EGiq7tuQ52aADGDHjIRzam2BenK8Qm9MsQ+xV+MnFQ",
-	"9IlHieuAAfXvVuvP146ePWqsPGCzSWNjt1Gbr+//0FhPWHwwqOtHzx6x2bixMVvf2h7UxRk0INx2SrjU",
-	"wEE2BgMsHgY0CIplbCMZqoRCi4IxqOsalFzfRhQMIA4dOg8a2Og2sUNb/KxrYBMnO2pAKx6WN/Ek9iGK",
-	"NLhaKgW4bxpfV09+2mPxIksWWPKUJXssTVm6xuJ1lizK9PrAdoVfNW4l6hZMXQlznFAL90HJkhcs2WJp",
-	"laW/sXj/JN2pV+8cPZk9nj9sbG00D39prM7X99bq1bU+WCl33gE1QxBQnziTEoBruqMjvcHHr45cZfH+",
-	"6EjLt4do+dQ1MUEDH0+FxMcmGNQPcT5OnoYLw3CGWhF3FXiuE2BRgZeROYanQhxQBSnpLksOWLLDdUur",
-	"LK4dPfm2sfcrRBp87tKP3dAxe61klbJ4hSU1Fm/K5Gr1vbv1jR0Wr7F4l8Vz3MU17E+TIr7uoGlELHTT",
-	"wipdHrL0L5Yu8X/j5yzeZPEBS+f5MXnB0nXx8ZTF2xxmel9cqzXX/2x+vymCbQrmJVsi4U8xsmh5LONA",
-	"tKTvetinRBISUERD8YVvI9uzRCF+BZpCz1NNbrTMJtr33Ju3cJFCJntvnKKPEcXmJdqhoYkofo8SG/cG",
-	"1Hgh5GENar3ad+utZYXZkc7x749ZPNdcuM+SZdmGqmihZ74awC5GRNm22uI027zjfmxdIQHtrxB1TVd8",
-	"EIpt8fGuj0tgwDuF01lbyCQvCPajdiDk+6jSg1W67Acn1yBdSFrcKvs5P1NAO4t/mzhXsDNJy/m+7UOt",
-	"jNsLl98jTsntA4m3s2jkZLm5/3Nz6Y4MPvbRtfFzl74YbctlwGcVt4IufHCOm2U/TWM/kL4GB/QBnXPj",
-	"ethBHgEDhgb0gSHQxOASzBTKos345yQWzHHeEEczaoIBn2AqGxG65tF5XRfd4ToUO8IQeZ5FisK0cCvg",
-	"CGZy0+9l0ne1uqCne8It8W0kh1z6B0sXWFw7fvi4vrgipsc9Fs9xecQMCW0b8d0BLL3L1wTnMmbJtvTA",
-	"2UOTAZcny32CWxXa1arkgVf6uLihdTwNbqgzO71SyG2zSDvzdu6h8S9u5xd6NPEfKtTT7AqNeA3yTXxv",
-	"myXL8lHUmuwaDEswqhht0IXcjos0eF8fOttEsZs6a0CBKlcB2TyJNPDcQCH7h2IcitEkOxsH9LJrVt4o",
-	"se2cO8cHfz9EPZoO95kZyfLR3xuN6tJbQnkbj4LsdrcVZogZyXwsTHEv/SPi/zP6X7Ht5BtO0RX9Gawv",
-	"fHOyvvVaDA5L9y83ab/J3jTlMgF1fYeK8r4uNvzr8/tW90Xjx8PG6oP/raqd75N2Pqq+4sbYn24pGPoW",
-	"GFCm1DMKBcstIqvsBtS4qF/UhW6ZvYo2+ezI/dUkQvCN1L2X1Rs2M8sWbDQR/RMAAP//",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -11,12 +11,120 @@ servers:
     description: AWS上のAPI
 
 tags:
+  - name: auth
+    description: パスキー登録・ログイン・ログアウト
   - name: todos
     description: TODO管理
   - name: health
     description: ヘルスチェック
 
 paths:
+  /auth/registration/begin:
+    post:
+      tags: [auth]
+      summary: パスキー登録を開始
+      description: 設定されたフロントエンドOriginから呼び出す。5分間有効な登録IDとWebAuthn作成オプションを返す。
+      operationId: beginRegistration
+      responses:
+        '200':
+          description: 登録オプション。options.publicKeyをブラウザのWebAuthn APIに渡す（バイナリ項目はbase64urlから変換）。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationOptions'
+        '403':
+          description: Originが未指定または許可されていない
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /auth/registration/finish:
+    post:
+      tags: [auth]
+      summary: パスキー登録を完了
+      description: 登録IDは検証時に一度だけ消費する。失敗した場合は登録開始からやり直す。成功時にユーザーとCredentialを保存するが、ログインセッションはまだ発行しない。
+      operationId: finishRegistration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationRequest'
+      responses:
+        '204':
+          description: ユーザーとパスキーを登録した
+        '400':
+          description: 入力不正、64KiB超の本文、登録期限切れ、使用済み登録ID、またはWebAuthn検証失敗
+        '403':
+          description: Originが未指定または許可されていない
+        '415':
+          description: Content-Typeがapplication/jsonではない
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /auth/login/begin:
+    post:
+      tags: [auth]
+      summary: パスキーログインを開始
+      description: 5分間有効な使い捨てログインIDとWebAuthn取得オプションを返す。
+      operationId: beginLogin
+      responses:
+        '200':
+          description: ログインオプション
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginOptions'
+        '403':
+          description: Originが未指定または許可されていない
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /auth/login/finish:
+    post:
+      tags: [auth]
+      summary: パスキーログインを完了
+      description: ログインIDを一度だけ消費し、署名検証に成功した場合のみHttpOnlyセッションCookieを発行する。
+      operationId: finishLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '204':
+          description: ログイン成功。Set-Cookieでセッションを発行する
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        '400':
+          description: 入力不正、ログインID期限切れ・使用済み、または署名検証失敗
+        '403':
+          description: Originが未指定または許可されていない
+        '415':
+          description: Content-Typeがapplication/jsonではない
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: ログアウト
+      description: 現在のセッションを無効化し、Cookieを失効させる。セッションがなくても成功する。
+      operationId: logout
+      responses:
+        '204':
+          description: ログアウトした
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        '403':
+          description: Originが未指定または許可されていない
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
   /health:
     get:
       tags:
@@ -35,7 +143,10 @@ paths:
     post:
       tags:
         - todos
+      security:
+        - todoSession: []
       summary: TODOを作成
+      description: ログイン中のユーザーを所有者として保存する
       operationId: createTodo
       requestBody:
         required: true
@@ -48,13 +159,18 @@ paths:
           description: TODOを作成した
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
     get:
       tags:
         - todos
+      security:
+        - todoSession: []
       summary: TODO一覧を取得
+      description: ログイン中のユーザーが所有するTODOのみ取得する
       operationId: listTodos
       parameters:
         - $ref: '#/components/parameters/TitleQuery'
@@ -69,6 +185,8 @@ paths:
                 $ref: '#/components/schemas/TodoListResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
@@ -76,7 +194,10 @@ paths:
     put:
       tags:
         - todos
+      security:
+        - todoSession: []
       summary: TODOのタイトルを更新
+      description: ログイン中のユーザーが所有するTODOのみ更新する。他人のTODOは404を返す
       operationId: updateTodo
       parameters:
         - $ref: '#/components/parameters/TodoID'
@@ -93,13 +214,18 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
     delete:
       tags:
         - todos
+      security:
+        - todoSession: []
       summary: TODOを削除
+      description: ログイン中のユーザーが所有するTODOのみ削除する。他人のTODOは404を返す
       operationId: deleteTodo
       parameters:
         - $ref: '#/components/parameters/TodoID'
@@ -110,10 +236,18 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
 components:
+  securitySchemes:
+    todoSession:
+      type: apiKey
+      in: cookie
+      name: todo_session
+
   parameters:
     TodoID:
       name: id
@@ -157,6 +291,136 @@ components:
         default: 0
 
   schemas:
+    LoginOptions:
+      type: object
+      required: [loginId, options]
+      properties:
+        loginId:
+          type: string
+          description: ログイン完了に必要なランダムトークン
+        options:
+          type: object
+          x-go-type: protocol.CredentialAssertion
+          x-go-type-import:
+            path: github.com/go-webauthn/webauthn/protocol
+            name: protocol
+          required: [publicKey]
+          properties:
+            publicKey:
+              type: object
+              description: challengeはbase64url文字列。navigator.credentials.getへ渡す前にバイト列へ変換する。
+              additionalProperties: true
+
+    LoginRequest:
+      type: object
+      required: [loginId, credential]
+      properties:
+        loginId:
+          type: string
+          minLength: 1
+        credential:
+          type: object
+          x-go-type: protocol.CredentialAssertionResponse
+          x-go-type-import:
+            path: github.com/go-webauthn/webauthn/protocol
+            name: protocol
+          required: [id, rawId, type, response]
+          properties:
+            id:
+              type: string
+            rawId:
+              type: string
+              description: base64url形式
+            type:
+              type: string
+              enum: [public-key]
+            response:
+              type: object
+              required: [clientDataJSON, authenticatorData, signature, userHandle]
+              properties:
+                clientDataJSON:
+                  type: string
+                authenticatorData:
+                  type: string
+                signature:
+                  type: string
+                userHandle:
+                  type: string
+            clientExtensionResults:
+              type: object
+              additionalProperties: true
+            authenticatorAttachment:
+              type: string
+
+    RegistrationOptions:
+      type: object
+      required: [registrationId, options]
+      properties:
+        registrationId:
+          type: string
+          description: 登録完了に必要なランダムトークン。ログへ記録しない。
+        options:
+          $ref: '#/components/schemas/WebAuthnCreationOptions'
+
+    WebAuthnCreationOptions:
+      type: object
+      x-go-type: protocol.CredentialCreation
+      x-go-type-import:
+        path: github.com/go-webauthn/webauthn/protocol
+        name: protocol
+      required: [publicKey]
+      properties:
+        publicKey:
+          type: object
+          description: WebAuthn PublicKeyCredentialCreationOptions。challengeとuser.idはbase64url文字列。
+          additionalProperties: true
+
+    RegistrationRequest:
+      type: object
+      required: [registrationId, credential]
+      properties:
+        registrationId:
+          type: string
+          minLength: 1
+        credential:
+          $ref: '#/components/schemas/WebAuthnCredential'
+
+    WebAuthnCredential:
+      type: object
+      x-go-type: protocol.CredentialCreationResponse
+      x-go-type-import:
+        path: github.com/go-webauthn/webauthn/protocol
+        name: protocol
+      required: [id, rawId, type, response]
+      properties:
+        id:
+          type: string
+        rawId:
+          type: string
+          description: Credential IDをbase64urlでエンコードした値
+        type:
+          type: string
+          enum: [public-key]
+        response:
+          type: object
+          required: [clientDataJSON, attestationObject]
+          properties:
+            clientDataJSON:
+              type: string
+              description: base64url形式のクライアントデータ
+            attestationObject:
+              type: string
+              description: base64url形式のattestation object
+            transports:
+              type: array
+              items:
+                type: string
+        clientExtensionResults:
+          type: object
+          additionalProperties: true
+        authenticatorAttachment:
+          type: string
+
     HealthResponse:
       type: object
       required:
@@ -212,6 +476,8 @@ components:
   responses:
     BadRequest:
       description: リクエストが不正
+    Unauthorized:
+      description: 有効なログインセッションがない
     NotFound:
       description: 指定されたTODOが存在しない
     ServiceUnavailable:

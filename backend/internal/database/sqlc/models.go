@@ -8,9 +8,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type PasskeyCredential struct {
+	CredentialID   []byte             `json:"credential_id"`
+	UserID         pgtype.UUID        `json:"user_id"`
+	CredentialData []byte             `json:"credential_data"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	LastUsedAt     pgtype.Timestamptz `json:"last_used_at"`
+}
+
 type Todo struct {
 	ID        int64              `json:"id"`
 	Title     string             `json:"title"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	UserID    pgtype.UUID        `json:"user_id"`
+}
+
+type User struct {
+	ID        pgtype.UUID        `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }

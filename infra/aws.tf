@@ -84,6 +84,15 @@ module "rds" {
   tags              = local.common_tags
 }
 
+module "elasticache" {
+  source = "./modules/elasticache"
+
+  name              = "${local.project}-auth"
+  subnet_ids        = module.subnet.private_subnet_ids
+  security_group_id = module.security_groups.redis_id
+  tags              = local.common_tags
+}
+
 module "iam" {
   source = "./modules/iam"
 
@@ -113,6 +122,7 @@ module "ecs" {
   secret_arn           = module.secrets.arn
   log_group_name       = module.logs.name
   database_host        = module.rds.address
+  redis_host           = module.elasticache.primary_endpoint_address
   cors_allowed_origins = "https://ca-techlounge-todo.kyo8.dev,http://localhost:8081"
   region               = local.region
   tags                 = local.common_tags

@@ -7,40 +7,53 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createTodo = `-- name: CreateTodo :one
 INSERT INTO todos (
-    title
+    title, user_id
 ) VALUES (
-    $1
+    $1, $2::uuid
 )
-RETURNING id, title, created_at, updated_at
+RETURNING id, title, created_at, updated_at, user_id
 `
 
-func (q *Queries) CreateTodo(ctx context.Context, title string) (Todo, error) {
-	row := q.db.QueryRow(ctx, createTodo, title)
+type CreateTodoParams struct {
+	Title   string      `json:"title"`
+	OwnerID pgtype.UUID `json:"owner_id"`
+}
+
+func (q *Queries) CreateTodo(ctx context.Context, arg CreateTodoParams) (Todo, error) {
+	row := q.db.QueryRow(ctx, createTodo, arg.Title, arg.OwnerID)
 	var i Todo
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserID,
 	)
 	return i, err
 }
 
 const deleteTodo = `-- name: DeleteTodo :one
 DELETE FROM todos
-WHERE id = $1
+WHERE id = $1 AND user_id = $2::uuid
 RETURNING id
 `
 
-func (q *Queries) DeleteTodo(ctx context.Context, id int64) (int64, error) {
-	row := q.db.QueryRow(ctx, deleteTodo, id)
-	var id_2 int64
-	err := row.Scan(&id_2)
-	return id_2, err
+type DeleteTodoParams struct {
+	TodoID  int64       `json:"todo_id"`
+	OwnerID pgtype.UUID `json:"owner_id"`
+}
+
+func (q *Queries) DeleteTodo(ctx context.Context, arg DeleteTodoParams) (int64, error) {
+	row := q.db.QueryRow(ctx, deleteTodo, arg.TodoID, arg.OwnerID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const listTodos = `-- name: ListTodos :many
@@ -48,22 +61,30 @@ SELECT
     id,
     title,
     created_at,
-    updated_at
+    updated_at,
+    user_id
 FROM todos
-WHERE title ILIKE '%' || $1::text || '%'
+WHERE user_id = $1::uuid
+  AND title ILIKE '%' || $2::text || '%'
 ORDER BY updated_at DESC, id DESC
-LIMIT $3::int
-OFFSET $2::int
+LIMIT $4::int
+OFFSET $3::int
 `
 
 type ListTodosParams struct {
-	Title      string `json:"title"`
-	PageOffset int32  `json:"page_offset"`
-	PageLimit  int32  `json:"page_limit"`
+	OwnerID    pgtype.UUID `json:"owner_id"`
+	Title      string      `json:"title"`
+	PageOffset int32       `json:"page_offset"`
+	PageLimit  int32       `json:"page_limit"`
 }
 
 func (q *Queries) ListTodos(ctx context.Context, arg ListTodosParams) ([]Todo, error) {
-	rows, err := q.db.Query(ctx, listTodos, arg.Title, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.Query(ctx, listTodos,
+		arg.OwnerID,
+		arg.Title,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +97,7 @@ func (q *Queries) ListTodos(ctx context.Context, arg ListTodosParams) ([]Todo, e
 			&i.Title,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UserID,
 		); err != nil {
 			return nil, err
 		}
@@ -90,25 +112,27 @@ func (q *Queries) ListTodos(ctx context.Context, arg ListTodosParams) ([]Todo, e
 const updateTodo = `-- name: UpdateTodo :one
 UPDATE todos
 SET
-    title = $2,
+    title = $1,
     updated_at = NOW()
-WHERE id = $1
-RETURNING id, title, created_at, updated_at
+WHERE id = $2 AND user_id = $3::uuid
+RETURNING id, title, created_at, updated_at, user_id
 `
 
 type UpdateTodoParams struct {
-	ID    int64  `json:"id"`
-	Title string `json:"title"`
+	Title   string      `json:"title"`
+	TodoID  int64       `json:"todo_id"`
+	OwnerID pgtype.UUID `json:"owner_id"`
 }
 
 func (q *Queries) UpdateTodo(ctx context.Context, arg UpdateTodoParams) (Todo, error) {
-	row := q.db.QueryRow(ctx, updateTodo, arg.ID, arg.Title)
+	row := q.db.QueryRow(ctx, updateTodo, arg.Title, arg.TodoID, arg.OwnerID)
 	var i Todo
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserID,
 	)
 	return i, err
 }

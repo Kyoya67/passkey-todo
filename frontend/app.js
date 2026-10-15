@@ -2,6 +2,11 @@ const apiInput = document.querySelector('#api-url');
 const list = document.querySelector('#todo-list');
 const message = document.querySelector('#message');
 const searchTitle = document.querySelector('#search-title');
+const authDialog = document.querySelector('#auth-dialog');
+const todoApp = document.querySelector('#todo-app');
+const authStatus = document.querySelector('#auth-status');
+const passkeyButton = document.querySelector('#register-passkey');
+const loginButton = document.querySelector('#login-passkey');
 const defaultAPIURL = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
   ? 'http://localhost:8080'
   : 'https://api.ca-techlounge-todo.kyo8.dev';
@@ -13,15 +18,167 @@ const request = async (path, options = {}) => {
   const headers = options.body ? { 'Content-Type': 'application/json' } : {};
   const response = await fetch(`${apiURL()}${path}`, {
     ...options,
+    credentials: 'include',
     headers: { ...headers, ...options.headers },
   });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(`HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
   return response.status === 204 ? null : response.json();
 };
 const show = (text, error = false) => {
   message.textContent = text;
   message.style.color = error ? '#c34e4e' : '#16816d';
 };
+const showAuthStatus = (text, error = false) => {
+  authStatus.textContent = text;
+  authStatus.style.color = error ? '#c34e4e' : '#16816d';
+};
+const showAuth = (text = '') => {
+  todoApp.hidden = true;
+  list.replaceChildren();
+  showAuthStatus(text, Boolean(text));
+  if (!authDialog.open) authDialog.showModal();
+};
+const showTodoApp = () => {
+  todoApp.hidden = false;
+  if (authDialog.open) authDialog.close();
+};
+// A session is required; Escape must not reveal the TODO controls.
+authDialog.addEventListener('cancel', (event) => event.preventDefault());
+const fromBase64URL = (value) => {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+};
+const toBase64URL = (value) => {
+  const bytes = new Uint8Array(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+const setAuthBusy = (busy) => {
+  passkeyButton.disabled = busy;
+  loginButton.disabled = busy;
+};
+const login = async (afterRegistration = false) => {
+  if (!window.PublicKeyCredential || !navigator.credentials?.get) {
+    showAuthStatus('このブラウザではパスキーを利用できません。', true);
+    return;
+  }
+  setAuthBusy(true);
+  showAuthStatus(
+    afterRegistration ? '登録できました。続けてログインしています…' : 'ログインを開始しています…'
+  );
+  try {
+    const { loginId, options } = await request('/auth/login/begin', { method: 'POST' });
+    const publicKey = options.publicKey;
+    const credential = await navigator.credentials.get({
+      publicKey: {
+        ...publicKey,
+        challenge: fromBase64URL(publicKey.challenge),
+        allowCredentials: publicKey.allowCredentials?.map((item) => ({
+          ...item,
+          id: fromBase64URL(item.id),
+        })),
+      },
+    });
+    if (!credential) throw new Error('パスキーを取得できませんでした');
+    await request('/auth/login/finish', {
+      method: 'POST',
+      body: JSON.stringify({
+        loginId,
+        credential: {
+          id: credential.id,
+          rawId: toBase64URL(credential.rawId),
+          type: credential.type,
+          response: {
+            clientDataJSON: toBase64URL(credential.response.clientDataJSON),
+            authenticatorData: toBase64URL(credential.response.authenticatorData),
+            signature: toBase64URL(credential.response.signature),
+            userHandle: credential.response.userHandle
+              ? toBase64URL(credential.response.userHandle)
+              : '',
+          },
+          clientExtensionResults: credential.getClientExtensionResults(),
+          authenticatorAttachment: credential.authenticatorAttachment ?? undefined,
+        },
+      }),
+    });
+    if (await load()) {
+      showTodoApp();
+    } else if (!authStatus.textContent) {
+      showAuthStatus('ログイン後のセッションを確認できませんでした。', true);
+    }
+  } catch (error) {
+    const detail =
+      error.name === 'NotAllowedError'
+        ? 'ログインがキャンセルされたか、時間切れになりました。'
+        : `ログインに失敗しました（${error.message}）。最初からお試しください。`;
+    showAuthStatus(afterRegistration ? `登録は完了しました。${detail}` : detail, true);
+  } finally {
+    setAuthBusy(false);
+  }
+};
+passkeyButton.addEventListener('click', async () => {
+  if (!window.PublicKeyCredential || !navigator.credentials?.create) {
+    showAuthStatus('このブラウザではパスキーを利用できません。', true);
+    return;
+  }
+  setAuthBusy(true);
+  showAuthStatus('登録を開始しています…');
+  let registered = false;
+  try {
+    const { registrationId, options } = await request('/auth/registration/begin', {
+      method: 'POST',
+    });
+    const publicKey = options.publicKey;
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        ...publicKey,
+        challenge: fromBase64URL(publicKey.challenge),
+        user: { ...publicKey.user, id: fromBase64URL(publicKey.user.id) },
+        excludeCredentials: publicKey.excludeCredentials?.map((item) => ({
+          ...item,
+          id: fromBase64URL(item.id),
+        })),
+      },
+    });
+    if (!credential) throw new Error('パスキーを作成できませんでした');
+    await request('/auth/registration/finish', {
+      method: 'POST',
+      body: JSON.stringify({
+        registrationId,
+        credential: {
+          id: credential.id,
+          rawId: toBase64URL(credential.rawId),
+          type: credential.type,
+          response: {
+            clientDataJSON: toBase64URL(credential.response.clientDataJSON),
+            attestationObject: toBase64URL(credential.response.attestationObject),
+            transports: credential.response.getTransports?.(),
+          },
+          clientExtensionResults: credential.getClientExtensionResults(),
+          authenticatorAttachment: credential.authenticatorAttachment ?? undefined,
+        },
+      }),
+    });
+    registered = true;
+  } catch (error) {
+    showAuthStatus(
+      error.name === 'NotAllowedError'
+        ? '登録がキャンセルされたか、時間切れになりました。もう一度お試しください。'
+        : `登録に失敗しました（${error.message}）。もう一度最初からお試しください。`,
+      true
+    );
+  } finally {
+    setAuthBusy(false);
+  }
+  if (registered) await login(true);
+});
+loginButton.addEventListener('click', () => login());
 const escapeHTML = (value) =>
   String(value).replace(
     /[&<>'"]/g,
@@ -41,8 +198,16 @@ async function load() {
           )
           .join('')
       : '<div class="empty">TODOはまだありません。</div>';
+    return true;
   } catch (error) {
+    list.replaceChildren();
+    if (error.status === 401) {
+      showAuth(todoApp.hidden ? '' : 'セッションが切れました。パスキーでログインしてください。');
+      return false;
+    }
     show(`一覧取得に失敗しました（${error.message}）`, true);
+    if (authDialog.open) showAuthStatus(`一覧取得に失敗しました（${error.message}）`, true);
+    return false;
   }
 }
 document.querySelector('#search-form').addEventListener('submit', async (event) => {
@@ -62,6 +227,8 @@ document.querySelector('#todo-form').addEventListener('submit', async (event) =>
     show('TODOを追加しました');
     await load();
   } catch (error) {
+    if (error.status === 401)
+      return showAuth('セッションが切れました。パスキーでログインしてください。');
     show(`追加に失敗しました（${error.message}）`, true);
   }
 });
@@ -94,6 +261,8 @@ list.addEventListener('click', async (event) => {
       await load();
     }
   } catch (error) {
+    if (error.status === 401)
+      return showAuth('セッションが切れました。パスキーでログインしてください。');
     show(`操作に失敗しました（${error.message}）`, true);
   }
 });
@@ -109,4 +278,21 @@ document.querySelector('#health-button').addEventListener('click', async () => {
     status.style.color = '#c34e4e';
   }
 });
-load();
+document.querySelector('#logout-button').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await request('/auth/logout', { method: 'POST' });
+    searchTitle.value = '';
+    message.textContent = '';
+    showAuth();
+  } catch (error) {
+    show(`ログアウトに失敗しました（${error.message}）`, true);
+  } finally {
+    button.disabled = false;
+  }
+});
+load().then((loaded) => {
+  if (loaded) showTodoApp();
+  else if (!authDialog.open) showAuth('TODOを読み込めませんでした。API接続を確認してください。');
+});
