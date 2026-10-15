@@ -293,6 +293,12 @@ form input {
 .todo.is-dragging {
   opacity: 0.5;
 }
+.todo.is-drop-before {
+  border-top: 4px solid #16816d;
+}
+.todo.is-drop-after {
+  border-bottom: 4px solid #16816d;
+}
 .touch-drag-preview {
   position: fixed;
   z-index: 1000;

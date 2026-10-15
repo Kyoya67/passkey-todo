@@ -11,10 +11,11 @@ import (
 )
 
 var (
-	ErrInvalidTitle  = errors.New("title must not be empty")
-	ErrInvalidStatus = errors.New("invalid todo status")
-	ErrInvalidPage   = errors.New("invalid pagination")
-	ErrNotFound      = errors.New("todo not found")
+	ErrInvalidTitle    = errors.New("title must not be empty")
+	ErrInvalidStatus   = errors.New("invalid todo status")
+	ErrInvalidPage     = errors.New("invalid pagination")
+	ErrInvalidPosition = errors.New("invalid todo position")
+	ErrNotFound        = errors.New("todo not found")
 )
 
 const (
@@ -30,6 +31,7 @@ type todoRepository interface {
 	List(context.Context, [16]byte, string, int32, int32) ([]sqlc.Todo, error)
 	Update(context.Context, [16]byte, int64, string, string) (sqlc.Todo, error)
 	Delete(context.Context, [16]byte, int64) error
+	Move(context.Context, [16]byte, int64, *int64) error
 }
 
 type Service struct {
@@ -92,6 +94,17 @@ func (s *Service) Update(ctx context.Context, userID [16]byte, id int64, title, 
 
 func (s *Service) Delete(ctx context.Context, userID [16]byte, id int64) error {
 	err := s.repository.Delete(ctx, userID, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
+}
+
+func (s *Service) Move(ctx context.Context, userID [16]byte, id int64, beforeID *int64) error {
+	if id < 1 || (beforeID != nil && *beforeID < 1) {
+		return ErrInvalidPosition
+	}
+	err := s.repository.Move(ctx, userID, id, beforeID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}

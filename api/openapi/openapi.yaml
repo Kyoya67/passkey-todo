@@ -155,12 +155,8 @@ paths:
             schema:
               $ref: '#/components/schemas/TodoRequest'
       responses:
-        '201':
+        '204':
           description: TODOを作成した
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Todo'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -212,12 +208,8 @@ paths:
             schema:
               $ref: '#/components/schemas/TodoRequest'
       responses:
-        '200':
+        '204':
           description: TODOを更新した
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Todo'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -246,6 +238,35 @@ paths:
           $ref: '#/components/responses/NotFound'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /todos/{id}/position:
+    put:
+      tags:
+        - todos
+      security:
+        - todoSession: []
+      summary: TODOを同じ状態の列内で並べ替える
+      description: beforeIdを指定するとそのTODOの直前へ、省略またはnullの場合は列末尾へ移動する。別の状態のTODOは指定できない
+      operationId: moveTodo
+      parameters:
+        - $ref: '#/components/parameters/TodoID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveTodoRequest'
+      responses:
+        '204':
+          description: 並び順を更新した
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
@@ -451,6 +472,16 @@ components:
         status:
           $ref: '#/components/schemas/TodoStatus'
 
+    MoveTodoRequest:
+      type: object
+      properties:
+        beforeId:
+          type: integer
+          format: int64
+          nullable: true
+          minimum: 1
+          description: 移動先の直後にあるTODOのID。省略時は列末尾へ移動する
+
     TodoStatus:
       type: string
       description: 未着手・進行中・完了。省略時は未着手
@@ -462,6 +493,7 @@ components:
         - id
         - title
         - status
+        - priority
         - createdAt
         - updatedAt
       properties:
@@ -474,6 +506,10 @@ components:
           example: 買い物をする
         status:
           $ref: '#/components/schemas/TodoStatus'
+        priority:
+          type: integer
+          format: int64
+          description: 同じ状態の列内の表示順。小さいほど上
         createdAt:
           type: string
           format: date-time

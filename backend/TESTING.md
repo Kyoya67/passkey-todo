@@ -138,7 +138,7 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 ## internal/todo（統合テスト）
 
-`repository_integration_test.go`では、`INTEGRATION_DATABASE_URL`で指定したPostgreSQLへ接続し、Fakeを使わずにCreate、List、Update、Deleteを実行している。所有者ごとの分離、`user_id`なしのINSERT拒否、作成したTODOの保存、一覧取得、ステータスの保存・更新・省略時の維持、不正なステータスのDB制約、更新後のタイトルと`updated_at`、削除後の更新失敗を検証する。
+`repository_integration_test.go`では、`INTEGRATION_DATABASE_URL`で指定したPostgreSQLへ接続し、Fakeを使わずにCreate、List、Update、Move、Deleteを実行している。所有者ごとの分離、`user_id`なしのINSERT拒否、作成したTODOの保存、一覧取得、ステータスの保存・更新・省略時の維持、不正なステータスのDB制約、優先順位の初期値・列内移動・異なる所有者やステータスへの移動拒否、更新後のタイトルと`updated_at`、削除後の更新失敗を検証する。
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|

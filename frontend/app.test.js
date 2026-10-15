@@ -15,9 +15,10 @@ function setup({ failUpdate = false } = {}) {
   const timers = new Map();
   let nextTimer = 1;
   const todos = [
-    { id: 1, title: 'One', status: 'not_started', updatedAt: '2026-10-15T00:00:00Z' },
-    { id: 2, title: 'Two', status: 'in_progress', updatedAt: '2026-10-15T00:00:00Z' },
-    { id: 3, title: 'Three', status: 'completed', updatedAt: '2026-10-15T00:00:00Z' },
+    { id: 1, title: 'One', status: 'not_started', priority: 1, updatedAt: '2026-10-15T00:00:00Z' },
+    { id: 2, title: 'Two', status: 'in_progress', priority: 1, updatedAt: '2026-10-15T00:00:00Z' },
+    { id: 3, title: 'Three', status: 'completed', priority: 1, updatedAt: '2026-10-15T00:00:00Z' },
+    { id: 4, title: 'Four', status: 'not_started', priority: 2, updatedAt: '2026-10-15T00:00:00Z' },
   ];
   const element = () => ({
     value: '',
@@ -90,11 +91,15 @@ function setup({ failUpdate = false } = {}) {
     clearTimeout: (id) => timers.delete(id),
     fetch: async (url, options = {}) => {
       calls.push({ url, options });
+      if (options.method === 'PUT' && url.endsWith('/position')) {
+        if (failUpdate) return { ok: false, status: 503 };
+        return { ok: true, status: 204 };
+      }
       if (options.method === 'PUT') {
         if (failUpdate) return { ok: false, status: 503 };
         const todo = todos.find((item) => item.id === Number(url.split('/').at(-1)));
         Object.assign(todo, JSON.parse(options.body));
-        return { ok: true, status: 200, json: async () => todo };
+        return { ok: true, status: 204 };
       }
       return { ok: true, status: 200, json: async () => ({ todos }) };
     },
@@ -219,4 +224,54 @@ test('a tap does not move a card', async () => {
     calls.some(({ options }) => options.method === 'PUT'),
     false
   );
+});
+
+test('dropping within a column updates priority before the target card', async () => {
+  const { listeners, calls } = setup();
+  await tick();
+  const source = { dataset: { id: '4' }, classList: { add() {} } };
+  const column = { dataset: { status: 'not_started' } };
+  const target = {
+    dataset: { id: '1' },
+    getBoundingClientRect: () => ({ top: 0, height: 100 }),
+  };
+  listeners.dragstart({
+    target: { closest: (selector) => (selector === '.todo' ? source : null) },
+    dataTransfer: { setData() {} },
+    preventDefault() {},
+  });
+  await listeners.drop({
+    target: { closest: (selector) => (selector === '.todo' ? target : column) },
+    clientY: 20,
+    preventDefault() {},
+  });
+  const move = calls.find(({ url }) => url.endsWith('/todos/4/position'));
+  assert.deepEqual(JSON.parse(move.options.body), { beforeId: 1 });
+  assert.equal(
+    calls.some(({ url }) => url.endsWith('/todos/4')),
+    false
+  );
+});
+
+test('dropping below a card places the todo at the end of the column', async () => {
+  const { listeners, calls } = setup();
+  await tick();
+  const source = { dataset: { id: '1' }, classList: { add() {} } };
+  const column = { dataset: { status: 'not_started' } };
+  const target = {
+    dataset: { id: '4' },
+    getBoundingClientRect: () => ({ top: 0, height: 100 }),
+  };
+  listeners.dragstart({
+    target: { closest: (selector) => (selector === '.todo' ? source : null) },
+    dataTransfer: { setData() {} },
+    preventDefault() {},
+  });
+  await listeners.drop({
+    target: { closest: (selector) => (selector === '.todo' ? target : column) },
+    clientY: 80,
+    preventDefault() {},
+  });
+  const move = calls.find(({ url }) => url.endsWith('/todos/1/position'));
+  assert.deepEqual(JSON.parse(move.options.body), { beforeId: null });
 });

@@ -33,7 +33,7 @@ func TestRepositoryIntegration(t *testing.T) {
 		t.Fatalf("ping database: %v", err)
 	}
 
-	repository := NewRepository(sqlc.New(pool))
+	repository := NewRepository(sqlc.New(pool), pool)
 	var ownerA, ownerB [16]byte
 	if _, err := rand.Read(ownerA[:]); err != nil {
 		t.Fatal(err)
@@ -72,6 +72,9 @@ func TestRepositoryIntegration(t *testing.T) {
 	if created.Status != StatusNotStarted {
 		t.Fatalf("created status=%q", created.Status)
 	}
+	if created.Priority < 1 {
+		t.Fatalf("created priority=%d", created.Priority)
+	}
 	if !created.CreatedAt.Time.Equal(created.UpdatedAt.Time) {
 		t.Fatalf("created and updated timestamps differ: created=%v updated=%v", created.CreatedAt.Time, created.UpdatedAt.Time)
 	}
@@ -85,6 +88,31 @@ func TestRepositoryIntegration(t *testing.T) {
 	}
 	if list[0].Status != StatusNotStarted {
 		t.Fatalf("listed status=%q", list[0].Status)
+	}
+	second, err := repository.Create(ctx, ownerA, title, StatusNotStarted)
+	if err != nil {
+		t.Fatalf("create second todo: %v", err)
+	}
+	defer repository.Delete(ctx, ownerA, second.ID)
+	if second.Priority <= created.Priority {
+		t.Fatalf("priority order: first=%d second=%d", created.Priority, second.Priority)
+	}
+	if err := repository.Move(ctx, ownerA, second.ID, &created.ID); err != nil {
+		t.Fatalf("move before first: %v", err)
+	}
+	ordered, err := repository.List(ctx, ownerA, title, 10, 0)
+	if err != nil || len(ordered) != 2 || ordered[0].ID != second.ID || ordered[1].ID != created.ID {
+		t.Fatalf("reordered todos=%+v err=%v", ordered, err)
+	}
+	if err := repository.Move(ctx, ownerB, second.ID, nil); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("other owner must not move todo: %v", err)
+	}
+	if err := repository.Move(ctx, ownerA, second.ID, nil); err != nil {
+		t.Fatalf("move to end: %v", err)
+	}
+	ordered, err = repository.List(ctx, ownerA, title, 10, 0)
+	if err != nil || ordered[1].ID != second.ID {
+		t.Fatalf("append order=%+v err=%v", ordered, err)
 	}
 	_, err = pool.Exec(ctx, "INSERT INTO todos (title, user_id, status) VALUES ($1, $2, $3)", title, pgtype.UUID{Bytes: ownerA, Valid: true}, "invalid")
 	var statusErr *pgconn.PgError
@@ -118,6 +146,9 @@ func TestRepositoryIntegration(t *testing.T) {
 	}
 	if updated.Status != StatusCompleted {
 		t.Fatalf("updated status=%q", updated.Status)
+	}
+	if err := repository.Move(ctx, ownerA, second.ID, &created.ID); !errors.Is(err, ErrInvalidPosition) {
+		t.Fatalf("cross-status anchor must fail: %v", err)
 	}
 	retained, err := repository.Update(ctx, ownerA, created.ID, updatedTitle, "")
 	if err != nil || retained.Status != StatusCompleted {

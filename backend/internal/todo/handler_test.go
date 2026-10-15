@@ -26,6 +26,7 @@ type fakeService struct {
 	listFn   func(context.Context, [16]byte, string, int32, int32) ([]sqlc.Todo, error)
 	updateFn func(context.Context, [16]byte, int64, string, string) (sqlc.Todo, error)
 	deleteFn func(context.Context, [16]byte, int64) error
+	moveFn   func(context.Context, [16]byte, int64, *int64) error
 }
 
 func (f *fakeService) Create(ctx context.Context, userID [16]byte, title, status string) (sqlc.Todo, error) {
@@ -42,6 +43,13 @@ func (f *fakeService) Update(ctx context.Context, userID [16]byte, id int64, tit
 
 func (f *fakeService) Delete(ctx context.Context, userID [16]byte, id int64) error {
 	return f.deleteFn(ctx, userID, id)
+}
+
+func (f *fakeService) Move(ctx context.Context, userID [16]byte, id int64, beforeID *int64) error {
+	if f.moveFn == nil {
+		return nil
+	}
+	return f.moveFn(ctx, userID, id, beforeID)
 }
 
 func newHandlerContext(method, target, body string) (echo.Context, *httptest.ResponseRecorder) {
@@ -97,12 +105,11 @@ func TestHandlerCreate(t *testing.T) {
 			return sqlc.Todo{Status: status}, nil
 		}})
 		ctx, response := newHandlerContext(http.MethodPost, "/todos", `{"title":"todo","status":"completed"}`)
-		if err := handler.CreateTodo(ctx); err != nil || response.Code != http.StatusCreated {
+		if err := handler.CreateTodo(ctx); err != nil || response.Code != http.StatusNoContent {
 			t.Fatalf("err=%v code=%d", err, response.Code)
 		}
-		var todo openapi.Todo
-		if err := json.Unmarshal(response.Body.Bytes(), &todo); err != nil || todo.Status != openapi.TodoStatus(StatusCompleted) {
-			t.Fatalf("todo=%+v err=%v", todo, err)
+		if response.Body.Len() != 0 {
+			t.Fatalf("body=%q", response.Body.String())
 		}
 	})
 	t.Run("rejects empty status", func(t *testing.T) {
@@ -131,7 +138,7 @@ func TestHandlerCreate(t *testing.T) {
 		{name: "invalid title", err: ErrInvalidTitle, want: http.StatusBadRequest},
 		{name: "invalid status", err: ErrInvalidStatus, want: http.StatusBadRequest},
 		{name: "service error", err: errors.New("failed"), want: http.StatusServiceUnavailable},
-		{name: "success", err: nil, want: http.StatusCreated},
+		{name: "success", err: nil, want: http.StatusNoContent},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			handler := NewHandler(&fakeService{createFn: func(_ context.Context, userID [16]byte, title, status string) (sqlc.Todo, error) {
@@ -185,12 +192,11 @@ func TestHandlerUpdateAndDelete(t *testing.T) {
 			return sqlc.Todo{Status: status}, nil
 		}})
 		ctx, response := newHandlerContext(http.MethodPut, "/todos/1", `{"title":"todo","status":"in_progress"}`)
-		if err := handler.UpdateTodo(ctx, 1); err != nil || response.Code != http.StatusOK {
+		if err := handler.UpdateTodo(ctx, 1); err != nil || response.Code != http.StatusNoContent {
 			t.Fatalf("err=%v code=%d", err, response.Code)
 		}
-		var todo openapi.Todo
-		if err := json.Unmarshal(response.Body.Bytes(), &todo); err != nil || todo.Status != openapi.TodoStatus(StatusInProgress) {
-			t.Fatalf("todo=%+v err=%v", todo, err)
+		if response.Body.Len() != 0 {
+			t.Fatalf("body=%q", response.Body.String())
 		}
 	})
 	for _, test := range []struct {
@@ -202,7 +208,7 @@ func TestHandlerUpdateAndDelete(t *testing.T) {
 		{name: "invalid status", err: ErrInvalidStatus, want: http.StatusBadRequest},
 		{name: "not found", err: ErrNotFound, want: http.StatusNotFound},
 		{name: "service error", err: errors.New("failed"), want: http.StatusServiceUnavailable},
-		{name: "success", err: nil, want: http.StatusOK},
+		{name: "success", err: nil, want: http.StatusNoContent},
 	} {
 		t.Run("update "+test.name, func(t *testing.T) {
 			handler := NewHandler(&fakeService{updateFn: func(_ context.Context, userID [16]byte, id int64, title, status string) (sqlc.Todo, error) {
@@ -236,6 +242,37 @@ func TestHandlerUpdateAndDelete(t *testing.T) {
 			}
 			if response.Code != test.want && !(test.name == "invalid title" && response.Code == http.StatusServiceUnavailable) && !(test.name == "success" && response.Code == http.StatusNoContent) {
 				t.Fatalf("status=%d want=%d", response.Code, test.want)
+			}
+		})
+	}
+}
+
+func TestHandlerMove(t *testing.T) {
+	beforeID := int64(2)
+	handler := NewHandler(&fakeService{moveFn: func(_ context.Context, userID [16]byte, id int64, before *int64) error {
+		if userID != testUserID || id != 1 || before == nil || *before != beforeID {
+			t.Fatalf("move user=%v id=%d before=%v", userID, id, before)
+		}
+		return nil
+	}})
+	ctx, response := newHandlerContext(http.MethodPut, "/todos/1/position", `{"beforeId":2}`)
+	if err := handler.MoveTodo(ctx, 1); err != nil || response.Code != http.StatusNoContent || response.Body.Len() != 0 {
+		t.Fatalf("err=%v status=%d body=%q", err, response.Code, response.Body.String())
+	}
+	for _, tc := range []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"invalid", ErrInvalidPosition, http.StatusBadRequest},
+		{"missing", ErrNotFound, http.StatusNotFound},
+		{"database", errors.New("db"), http.StatusServiceUnavailable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := NewHandler(&fakeService{moveFn: func(context.Context, [16]byte, int64, *int64) error { return tc.err }})
+			ctx, response := newHandlerContext(http.MethodPut, "/todos/1/position", `{}`)
+			if err := h.MoveTodo(ctx, 1); err != nil || response.Code != tc.want {
+				t.Fatalf("err=%v status=%d", err, response.Code)
 			}
 		})
 	}

@@ -210,7 +210,9 @@ const renderBoard = (todos) => {
   currentTodos = new Map(todos.map((todo) => [String(todo.id), todo]));
   list.innerHTML = columns
     .map(({ status, label }) => {
-      const cards = todos.filter((todo) => todo.status === status);
+      const cards = todos
+        .filter((todo) => todo.status === status)
+        .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0) || a.id - b.id);
       return `<section class="kanban-column" data-status="${status}" aria-label="${label}">
         <div class="column-heading"><h3>${label}</h3><span class="column-count">${cards.length}</span></div>
         <div class="column-cards">${cards.map(renderCard).join('')}</div>
@@ -221,9 +223,27 @@ const renderBoard = (todos) => {
 
 const clearDrag = () => {
   draggedTodoID = null;
-  list.querySelectorAll('.is-drop-target, .is-dragging').forEach((element) => {
-    element.classList.remove('is-drop-target', 'is-dragging');
+  list
+    .querySelectorAll('.is-drop-target, .is-dragging, .is-drop-before, .is-drop-after')
+    .forEach((element) => {
+      element.classList.remove('is-drop-target', 'is-dragging', 'is-drop-before', 'is-drop-after');
+    });
+};
+
+const highlightPosition = (target, id, clientY) => {
+  list.querySelectorAll('.is-drop-before, .is-drop-after').forEach((card) => {
+    card.classList.remove('is-drop-before', 'is-drop-after');
   });
+  const card = target?.closest('.todo');
+  const column = target?.closest('.kanban-column');
+  if (
+    !card ||
+    card.dataset.id === String(id) ||
+    column?.dataset.status !== currentTodos.get(String(id))?.status
+  )
+    return;
+  const rect = card.getBoundingClientRect();
+  card.classList.add(clientY < rect.top + rect.height / 2 ? 'is-drop-before' : 'is-drop-after');
 };
 
 const highlightColumn = (column) => {
@@ -242,6 +262,9 @@ const clearTouchDrag = () => {
     touchDrag.card.releasePointerCapture(touchDrag.pointerId);
   }
   highlightColumn(null);
+  list.querySelectorAll('.is-drop-before, .is-drop-after').forEach((card) => {
+    card.classList.remove('is-drop-before', 'is-drop-after');
+  });
   touchDrag = null;
 };
 
@@ -251,13 +274,11 @@ const updateStatus = async (id, status) => {
   statusBusy = true;
   list.setAttribute('aria-busy', 'true');
   try {
-    const updated = await request(`/todos/${id}`, {
+    await request(`/todos/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ title: todo.title, status }),
     });
-    currentTodos.set(String(id), { ...todo, ...updated, status });
     if (await load()) show('状態を更新しました');
-    else if (!todoApp.hidden) renderBoard([...currentTodos.values()]);
   } catch (error) {
     if (error.status === 401) {
       showAuth('セッションが切れました。パスキーでログインしてください。');
@@ -269,6 +290,47 @@ const updateStatus = async (id, status) => {
     statusBusy = false;
     list.removeAttribute('aria-busy');
   }
+};
+const movePriority = async (id, targetID, after = false) => {
+  const todo = currentTodos.get(String(id));
+  if (!todo || statusBusy) return;
+  const ids = [...currentTodos.values()]
+    .filter((item) => item.status === todo.status)
+    .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0) || a.id - b.id)
+    .map((item) => String(item.id))
+    .filter((itemID) => itemID !== String(id));
+  let index = targetID ? ids.indexOf(String(targetID)) : ids.length;
+  if (index < 0) return;
+  if (after && targetID) index++;
+  const beforeId = ids[index] ? Number(ids[index]) : null;
+  if (targetID === String(id)) return;
+  statusBusy = true;
+  list.setAttribute('aria-busy', 'true');
+  try {
+    await request(`/todos/${id}/position`, {
+      method: 'PUT',
+      body: JSON.stringify({ beforeId }),
+    });
+    if (await load()) show('優先順位を更新しました');
+  } catch (error) {
+    if (error.status === 401) showAuth('セッションが切れました。パスキーでログインしてください。');
+    else show(`優先順位の更新に失敗しました（${error.message}）`, true);
+  } finally {
+    statusBusy = false;
+    list.removeAttribute('aria-busy');
+  }
+};
+const dropTodo = async (id, column, target, clientY) => {
+  if (!column) return;
+  const todo = currentTodos.get(String(id));
+  if (!todo) return;
+  if (todo.status !== column.dataset.status) return updateStatus(id, column.dataset.status);
+  const card = target?.closest('.todo');
+  const targetID = card?.dataset.id;
+  const midpoint = card?.getBoundingClientRect
+    ? card.getBoundingClientRect().top + card.getBoundingClientRect().height / 2
+    : 0;
+  return movePriority(id, targetID, Boolean(card && clientY > midpoint));
 };
 async function load() {
   try {
@@ -328,6 +390,7 @@ list.addEventListener('dragover', (event) => {
   event.preventDefault();
   event.dataTransfer.dropEffect = 'move';
   highlightColumn(column);
+  highlightPosition(event.target, draggedTodoID, event.clientY);
 });
 list.addEventListener('drop', async (event) => {
   const column = event.target.closest('.kanban-column');
@@ -335,7 +398,7 @@ list.addEventListener('drop', async (event) => {
   event.preventDefault();
   const id = draggedTodoID;
   clearDrag();
-  await updateStatus(id, column.dataset.status);
+  await dropTodo(id, column, event.target, event.clientY);
 });
 list.addEventListener('dragend', clearDrag);
 list.addEventListener('dragleave', (event) => {
@@ -383,18 +446,17 @@ window.addEventListener('pointermove', (event) => {
   event.preventDefault();
   touchDrag.ghost.style.left = `${event.clientX}px`;
   touchDrag.ghost.style.top = `${event.clientY}px`;
-  highlightColumn(
-    document.elementFromPoint(event.clientX, event.clientY)?.closest('.kanban-column')
-  );
+  const target = document.elementFromPoint(event.clientX, event.clientY);
+  highlightColumn(target?.closest('.kanban-column'));
+  highlightPosition(target, touchDrag.id, event.clientY);
 });
 window.addEventListener('pointerup', async (event) => {
   if (!touchDrag || event.pointerId !== touchDrag.pointerId) return;
   const { active, id } = touchDrag;
-  const column = active
-    ? document.elementFromPoint(event.clientX, event.clientY)?.closest('.kanban-column')
-    : null;
+  const target = active ? document.elementFromPoint(event.clientX, event.clientY) : null;
+  const column = target?.closest('.kanban-column');
   clearTouchDrag();
-  if (column) await updateStatus(id, column.dataset.status);
+  if (column) await dropTodo(id, column, target, event.clientY);
 });
 window.addEventListener('pointercancel', (event) => {
   if (touchDrag?.pointerId === event.pointerId) clearTouchDrag();

@@ -62,7 +62,7 @@ func TestRepository(t *testing.T) {
 			return params.TodoID, nil
 		},
 	}
-	repository := NewRepository(queries)
+	repository := NewRepository(queries, nil)
 
 	created, err := repository.Create(context.Background(), testUserID, "create", StatusNotStarted)
 	if err != nil || created.Title != "create" {

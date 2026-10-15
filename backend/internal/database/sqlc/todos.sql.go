@@ -13,11 +13,12 @@ import (
 
 const createTodo = `-- name: CreateTodo :one
 INSERT INTO todos (
-    title, user_id, status
+    title, user_id, status, priority
 ) VALUES (
-    $1, $2::uuid, $3
+    $1, $2::uuid, $3,
+    (SELECT COALESCE(MAX(priority), 0) + 1 FROM todos WHERE user_id = $2::uuid AND status = $3)
 )
-RETURNING id, title, created_at, updated_at, user_id, status
+RETURNING id, title, created_at, updated_at, user_id, status, priority
 `
 
 type CreateTodoParams struct {
@@ -36,6 +37,7 @@ func (q *Queries) CreateTodo(ctx context.Context, arg CreateTodoParams) (Todo, e
 		&i.UpdatedAt,
 		&i.UserID,
 		&i.Status,
+		&i.Priority,
 	)
 	return i, err
 }
@@ -65,11 +67,12 @@ SELECT
     created_at,
     updated_at,
     user_id,
-    status
+    status,
+    priority
 FROM todos
 WHERE user_id = $1::uuid
   AND title ILIKE '%' || $2::text || '%'
-ORDER BY updated_at DESC, id DESC
+ORDER BY status, priority, id
 LIMIT $4::int
 OFFSET $3::int
 `
@@ -102,6 +105,7 @@ func (q *Queries) ListTodos(ctx context.Context, arg ListTodosParams) ([]Todo, e
 			&i.UpdatedAt,
 			&i.UserID,
 			&i.Status,
+			&i.Priority,
 		); err != nil {
 			return nil, err
 		}
@@ -114,28 +118,32 @@ func (q *Queries) ListTodos(ctx context.Context, arg ListTodosParams) ([]Todo, e
 }
 
 const updateTodo = `-- name: UpdateTodo :one
-UPDATE todos
+UPDATE todos AS target
 SET
     title = $1,
-    status = COALESCE(NULLIF($2::text, ''), status),
+    priority = CASE WHEN target.status <> COALESCE(NULLIF($2::text, ''), target.status)
+        THEN (SELECT COALESCE(MAX(other.priority), 0) + 1 FROM todos AS other
+              WHERE other.user_id = $3::uuid AND other.status = $2::text)
+        ELSE target.priority END,
+    status = COALESCE(NULLIF($2::text, ''), target.status),
     updated_at = NOW()
-WHERE id = $3 AND user_id = $4::uuid
-RETURNING id, title, created_at, updated_at, user_id, status
+WHERE target.id = $4 AND target.user_id = $3::uuid
+RETURNING target.id, target.title, target.created_at, target.updated_at, target.user_id, target.status, target.priority
 `
 
 type UpdateTodoParams struct {
 	Title   string      `json:"title"`
 	Status  string      `json:"status"`
-	TodoID  int64       `json:"todo_id"`
 	OwnerID pgtype.UUID `json:"owner_id"`
+	TodoID  int64       `json:"todo_id"`
 }
 
 func (q *Queries) UpdateTodo(ctx context.Context, arg UpdateTodoParams) (Todo, error) {
 	row := q.db.QueryRow(ctx, updateTodo,
 		arg.Title,
 		arg.Status,
-		arg.TodoID,
 		arg.OwnerID,
+		arg.TodoID,
 	)
 	var i Todo
 	err := row.Scan(
@@ -145,6 +153,7 @@ func (q *Queries) UpdateTodo(ctx context.Context, arg UpdateTodoParams) (Todo, e
 		&i.UpdatedAt,
 		&i.UserID,
 		&i.Status,
+		&i.Priority,
 	)
 	return i, err
 }

@@ -15,6 +15,7 @@ type fakeRepository struct {
 	listFn   func(context.Context, [16]byte, string, int32, int32) ([]sqlc.Todo, error)
 	updateFn func(context.Context, [16]byte, int64, string, string) (sqlc.Todo, error)
 	deleteFn func(context.Context, [16]byte, int64) error
+	moveFn   func(context.Context, [16]byte, int64, *int64) error
 }
 
 func (f *fakeRepository) Create(ctx context.Context, userID [16]byte, title, status string) (sqlc.Todo, error) {
@@ -31,6 +32,29 @@ func (f *fakeRepository) Update(ctx context.Context, userID [16]byte, id int64, 
 
 func (f *fakeRepository) Delete(ctx context.Context, userID [16]byte, id int64) error {
 	return f.deleteFn(ctx, userID, id)
+}
+
+func (f *fakeRepository) Move(ctx context.Context, userID [16]byte, id int64, beforeID *int64) error {
+	if f.moveFn == nil {
+		return nil
+	}
+	return f.moveFn(ctx, userID, id, beforeID)
+}
+
+func TestServiceMove(t *testing.T) {
+	service := NewService(&fakeRepository{moveFn: func(_ context.Context, userID [16]byte, id int64, beforeID *int64) error {
+		if userID != testUserID || id != 3 || beforeID == nil || *beforeID != 2 {
+			t.Fatalf("move args: %v %d %v", userID, id, beforeID)
+		}
+		return pgx.ErrNoRows
+	}})
+	anchor := int64(2)
+	if err := service.Move(context.Background(), testUserID, 3, &anchor); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err=%v", err)
+	}
+	if err := service.Move(context.Background(), testUserID, 0, nil); !errors.Is(err, ErrInvalidPosition) {
+		t.Fatalf("err=%v", err)
+	}
 }
 
 func TestServiceCreate(t *testing.T) {
