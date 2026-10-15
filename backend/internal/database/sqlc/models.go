@@ -21,6 +21,7 @@ type Todo struct {
 	Title     string             `json:"title"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	UserID    pgtype.UUID        `json:"user_id"`
 }
 
 type User struct {

@@ -23,6 +23,11 @@ func UserID(ctx context.Context) ([16]byte, bool) {
 	return id, ok
 }
 
+// WithUserID attaches an already verified user ID to a request context.
+func WithUserID(ctx context.Context, id [16]byte) context.Context {
+	return context.WithValue(ctx, userIDContextKey{}, id)
+}
+
 // RequireTodoSession protects only the TODO routes. Auth and health remain public.
 func RequireTodoSession(sessions sessionLoader) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -43,7 +48,7 @@ func RequireTodoSession(sessions sessionLoader) echo.MiddlewareFunc {
 				c.Logger().Error("todo authentication failed: stage=session_store")
 				return c.NoContent(http.StatusServiceUnavailable)
 			}
-			c.SetRequest(c.Request().WithContext(context.WithValue(c.Request().Context(), userIDContextKey{}, id)))
+			c.SetRequest(c.Request().WithContext(WithUserID(c.Request().Context(), id)))
 			return next(c)
 		}
 	}

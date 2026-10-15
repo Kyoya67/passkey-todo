@@ -8,14 +8,15 @@ import (
 	"github.com/labstack/echo/v4"
 
 	sqlc "github.com/catechlounge/kyoya67-todo/backend/internal/database/sqlc"
+	"github.com/catechlounge/kyoya67-todo/backend/internal/middleware"
 	"github.com/catechlounge/kyoya67-todo/backend/internal/openapi"
 )
 
 type todoService interface {
-	Create(context.Context, string) error
-	List(context.Context, string, int32, int32) ([]sqlc.Todo, error)
-	Update(context.Context, int64, string) error
-	Delete(context.Context, int64) error
+	Create(context.Context, [16]byte, string) error
+	List(context.Context, [16]byte, string, int32, int32) ([]sqlc.Todo, error)
+	Update(context.Context, [16]byte, int64, string) error
+	Delete(context.Context, [16]byte, int64) error
 }
 
 type Handler struct{ service todoService }
@@ -36,11 +37,15 @@ func (h *Handler) GetHealth(c echo.Context) error {
 }
 
 func (h *Handler) CreateTodo(c echo.Context) error {
+	userID, ok := middleware.UserID(c.Request().Context())
+	if !ok {
+		return c.NoContent(http.StatusUnauthorized)
+	}
 	var request openapi.CreateTodoJSONRequestBody
 	if err := c.Bind(&request); err != nil {
 		return c.NoContent(http.StatusBadRequest)
 	}
-	if err := h.service.Create(c.Request().Context(), request.Title); err != nil {
+	if err := h.service.Create(c.Request().Context(), userID, request.Title); err != nil {
 		if errors.Is(err, ErrInvalidTitle) {
 			return c.NoContent(http.StatusBadRequest)
 		}
@@ -50,6 +55,10 @@ func (h *Handler) CreateTodo(c echo.Context) error {
 }
 
 func (h *Handler) ListTodos(c echo.Context, params openapi.ListTodosParams) error {
+	userID, ok := middleware.UserID(c.Request().Context())
+	if !ok {
+		return c.NoContent(http.StatusUnauthorized)
+	}
 	var title string
 	if params.Title != nil {
 		title = *params.Title
@@ -61,7 +70,7 @@ func (h *Handler) ListTodos(c echo.Context, params openapi.ListTodosParams) erro
 	if params.Offset != nil {
 		offset = *params.Offset
 	}
-	todos, err := h.service.List(c.Request().Context(), title, limit, offset)
+	todos, err := h.service.List(c.Request().Context(), userID, title, limit, offset)
 	if errors.Is(err, ErrInvalidPage) {
 		return c.NoContent(http.StatusBadRequest)
 	}
@@ -76,11 +85,15 @@ func (h *Handler) ListTodos(c echo.Context, params openapi.ListTodosParams) erro
 }
 
 func (h *Handler) UpdateTodo(c echo.Context, id openapi.TodoID) error {
+	userID, ok := middleware.UserID(c.Request().Context())
+	if !ok {
+		return c.NoContent(http.StatusUnauthorized)
+	}
 	var request openapi.UpdateTodoJSONRequestBody
 	if err := c.Bind(&request); err != nil {
 		return c.NoContent(http.StatusBadRequest)
 	}
-	err := h.service.Update(c.Request().Context(), id, request.Title)
+	err := h.service.Update(c.Request().Context(), userID, id, request.Title)
 	if errors.Is(err, ErrInvalidTitle) {
 		return c.NoContent(http.StatusBadRequest)
 	}
@@ -94,7 +107,11 @@ func (h *Handler) UpdateTodo(c echo.Context, id openapi.TodoID) error {
 }
 
 func (h *Handler) DeleteTodo(c echo.Context, id openapi.TodoID) error {
-	if err := h.service.Delete(c.Request().Context(), id); err != nil {
+	userID, ok := middleware.UserID(c.Request().Context())
+	if !ok {
+		return c.NoContent(http.StatusUnauthorized)
+	}
+	if err := h.service.Delete(c.Request().Context(), userID, id); err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return c.NoContent(http.StatusNotFound)
 		}

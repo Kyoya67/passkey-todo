@@ -69,11 +69,12 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 `cors_test.go`では、許可OriginへのCookie付きリクエストのCORSヘッダーを確認する。`cors.go`の`CORS`は単体テストで100.0%。
 
-`auth_test.go`では、TODO一覧・作成・更新・削除の未ログイン拒否、正しいセッションの通過、期限切れ・不正セッションの拒否、Redis障害時の503、公開ルートとCORSプリフライトの通過を確認する。ユーザーIDをリクエストコンテキストへ渡すことも確認するが、TODOのユーザー別認可は未実装。
+`auth_test.go`では、TODO一覧・作成・更新・削除の未ログイン拒否、正しいセッションの通過、期限切れ・不正セッションの拒否、Redis障害時の503、公開ルートとCORSプリフライトの通過を確認する。ユーザーIDをリクエストコンテキストへ渡すことも確認する。TODOの所有者条件はTODOパッケージで検証する。
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
 | auth.go | UserID | 100.0% |
+|  | WithUserID | 100.0% |
 |  | RequireTodoSession | 100.0% |
 | cors.go | CORS | 100.0% |
 | **パッケージ合計** |  | **100.0%** |
@@ -100,7 +101,7 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 ## internal/todo
 
-`handler_test.go`では、Fake Serviceを差し替え、HTTPリクエストのバインド、レスポンスJSON、ステータスコード、サービスエラーのHTTP変換、TODOのレスポンス変換をテストしている。503では操作名だけをログに残し、タイトルやDBエラー本文を漏らさないことも確認する。
+`handler_test.go`では、Fake Serviceを差し替え、認証済みユーザーIDの引き渡しと未認証リクエストの401、HTTPリクエストのバインド、レスポンスJSON、ステータスコード、サービスエラーのHTTP変換、TODOのレスポンス変換をテストしている。503では操作名だけをログに残し、タイトルやDBエラー本文を漏らさないことも確認する。
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
@@ -108,11 +109,11 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 |  | serviceUnavailable | 100.0% |
 |  | GetHealth | 100.0% |
 |  | CreateTodo | 100.0% |
-|  | ListTodos | 94.1% |
-|  | UpdateTodo | 90.9% |
+|  | ListTodos | 95.0% |
+|  | UpdateTodo | 92.9% |
 |  | DeleteTodo | 100.0% |
 |  | toTodo | 100.0% |
-`service_test.go`では、Fake Repositoryを差し替え、タイトルの入力検証、ページネーションのデフォルト値・上限値・不正値、Repositoryエラーの伝播、`pgx.ErrNoRows`から`ErrNotFound`への変換をテストしている。
+`service_test.go`では、Fake Repositoryを差し替え、認証済みユーザーIDの引き渡し、タイトルの入力検証、ページネーションのデフォルト値・上限値・不正値、Repositoryエラーの伝播、`pgx.ErrNoRows`から`ErrNotFound`への変換をテストしている。
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
@@ -121,7 +122,7 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 |  | List | 100.0% |
 |  | Update | 83.3% |
 |  | Delete | 75.0% |
-`repository_test.go`では、sqlcのクエリメソッドを持つFakeを差し替え、Create、List、Update、Deleteへ渡す引数、戻り値の受け渡し、Repositoryでのエラー伝播をテストしている。`repository_integration_test.go`では、PostgreSQLへ接続し、TODOの実保存、一覧取得、更新、更新日時、削除を検証している。
+`repository_test.go`では、sqlcのクエリメソッドを持つFakeを差し替え、Create、List、Update、Deleteへ渡す所有者IDを含む引数、戻り値の受け渡し、Repositoryでのエラー伝播をテストしている。`repository_integration_test.go`には、実DBでの所有者別一覧、他ユーザーによる更新・削除の拒否、所有者未設定の旧TODOの非表示を追加した。今回の計測ではDB未起動のため統合テストは実行していない。
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
@@ -130,7 +131,7 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 |  | List | 100.0% |
 |  | Update | 100.0% |
 |  | Delete | 100.0% |
-| **パッケージ合計（単体テスト）** |  | **94.4%** |
+| **パッケージ合計（単体テスト）** |  | **95.2%** |
 
 ## internal/todo（統合テスト）
 

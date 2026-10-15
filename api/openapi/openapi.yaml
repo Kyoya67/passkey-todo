@@ -128,6 +128,7 @@ paths:
       security:
         - todoSession: []
       summary: TODOを作成
+      description: ログイン中のユーザーを所有者として保存する
       operationId: createTodo
       requestBody:
         required: true
@@ -151,6 +152,7 @@ paths:
       security:
         - todoSession: []
       summary: TODO一覧を取得
+      description: ログイン中のユーザーが所有するTODOのみ取得する
       operationId: listTodos
       parameters:
         - $ref: '#/components/parameters/TitleQuery'
@@ -177,6 +179,7 @@ paths:
       security:
         - todoSession: []
       summary: TODOのタイトルを更新
+      description: ログイン中のユーザーが所有するTODOのみ更新する。他人のTODOは404を返す
       operationId: updateTodo
       parameters:
         - $ref: '#/components/parameters/TodoID'
@@ -204,6 +207,7 @@ paths:
       security:
         - todoSession: []
       summary: TODOを削除
+      description: ログイン中のユーザーが所有するTODOのみ削除する。他人のTODOは404を返す
       operationId: deleteTodo
       parameters:
         - $ref: '#/components/parameters/TodoID'
