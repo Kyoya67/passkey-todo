@@ -405,14 +405,25 @@ form input {
 .todo.is-dragging {
   opacity: 0.5;
 }
-.todo.is-drop-before {
-  margin-block-start: var(--sort-gap, 64px);
-  border-top: 4px solid #16816d;
-}
+.todo.is-drop-before,
 .todo.is-drop-after {
-  margin-block-end: var(--sort-gap, 64px);
-  border-bottom: 4px solid #16816d;
+  position: relative;
 }
+
+.todo.is-drop-before::before,
+.todo.is-drop-after::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #16816d;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.todo.is-drop-before::before { top: -7px; }
+.todo.is-drop-after::after { bottom: -7px; }
 @media (prefers-reduced-motion: reduce) {
   .todo {
     transition: none;
