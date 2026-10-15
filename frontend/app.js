@@ -184,20 +184,87 @@ const escapeHTML = (value) =>
     /[&<>'"]/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]
   );
+const columns = [
+  { status: 'not_started', label: '未着手' },
+  { status: 'in_progress', label: '進行中' },
+  { status: 'completed', label: '完了' },
+];
+let currentTodos = new Map();
+let draggedTodoID = null;
+let statusBusy = false;
+
+const renderCard = (todo) => `
+  <article class="todo" data-id="${escapeHTML(todo.id)}" draggable="true">
+    <div class="todo-details">
+      <p class="todo-title">${escapeHTML(todo.title)}</p>
+      <p class="todo-meta">更新：${new Date(todo.updatedAt).toLocaleString('ja-JP')}</p>
+    </div>
+    <div class="todo-actions">
+      <label>状態
+        <select class="todo-status" aria-label="${escapeHTML(todo.title)}の状態">
+          ${columns.map(({ status, label }) => `<option value="${status}" ${todo.status === status ? 'selected' : ''}>${label}</option>`).join('')}
+        </select>
+      </label>
+      <button class="button secondary edit" type="button">編集</button>
+      <button class="button secondary delete" type="button">削除</button>
+    </div>
+  </article>`;
+
+const renderBoard = (todos) => {
+  currentTodos = new Map(todos.map((todo) => [String(todo.id), todo]));
+  list.innerHTML = columns
+    .map(({ status, label }) => {
+      const cards = todos.filter((todo) => todo.status === status);
+      return `<section class="kanban-column" data-status="${status}" aria-label="${label}">
+        <div class="column-heading"><h3>${label}</h3><span class="column-count">${cards.length}</span></div>
+        <div class="column-cards">${cards.map(renderCard).join('')}</div>
+      </section>`;
+    })
+    .join('');
+};
+
+const clearDrag = () => {
+  draggedTodoID = null;
+  list.querySelectorAll('.is-drop-target, .is-dragging').forEach((element) => {
+    element.classList.remove('is-drop-target', 'is-dragging');
+  });
+};
+
+const updateStatus = async (id, status) => {
+  const todo = currentTodos.get(String(id));
+  if (!todo || todo.status === status || statusBusy) return;
+  statusBusy = true;
+  list.setAttribute('aria-busy', 'true');
+  list.querySelectorAll('.todo-status').forEach((select) => {
+    select.disabled = true;
+  });
+  try {
+    const updated = await request(`/todos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ title: todo.title, status }),
+    });
+    currentTodos.set(String(id), { ...todo, ...updated, status });
+    if (await load()) show('状態を更新しました');
+    else if (!todoApp.hidden) renderBoard([...currentTodos.values()]);
+  } catch (error) {
+    if (error.status === 401) {
+      showAuth('セッションが切れました。パスキーでログインしてください。');
+    } else {
+      show(`状態の更新に失敗しました（${error.message}）`, true);
+      renderBoard([...currentTodos.values()]);
+    }
+  } finally {
+    statusBusy = false;
+    list.removeAttribute('aria-busy');
+  }
+};
 async function load() {
   try {
     const title = searchTitle.value.trim();
     const query = title ? `?${new URLSearchParams({ title })}` : '';
     const data = await request(`/todos${query}`);
     const todos = data.todos || [];
-    list.innerHTML = todos.length
-      ? todos
-          .map(
-            (todo) =>
-              `<article class="todo" data-id="${todo.id}"><div><p class="todo-title">${escapeHTML(todo.title)}</p><p class="todo-meta">更新：${new Date(todo.updatedAt).toLocaleString('ja-JP')}</p></div><div class="todo-actions"><label>状態 <select class="todo-status" aria-label="${escapeHTML(todo.title)}の状態"><option value="not_started" ${todo.status === 'not_started' ? 'selected' : ''}>未着手</option><option value="in_progress" ${todo.status === 'in_progress' ? 'selected' : ''}>進行中</option><option value="completed" ${todo.status === 'completed' ? 'selected' : ''}>完了</option></select></label><button class="button secondary edit">編集</button><button class="button secondary delete">削除</button></div></article>`
-          )
-          .join('')
-      : '<div class="empty">TODOはまだありません。</div>';
+    renderBoard(todos);
     return true;
   } catch (error) {
     list.replaceChildren();
@@ -221,13 +288,9 @@ document.querySelector('#todo-form').addEventListener('submit', async (event) =>
   try {
     await request('/todos', {
       method: 'POST',
-      body: JSON.stringify({
-        title: input.value.trim(),
-        status: document.querySelector('#new-status').value,
-      }),
+      body: JSON.stringify({ title: input.value.trim() }),
     });
     input.value = '';
-    document.querySelector('#new-status').value = 'not_started';
     show('TODOを追加しました');
     await load();
   } catch (error) {
@@ -239,22 +302,41 @@ document.querySelector('#todo-form').addEventListener('submit', async (event) =>
 list.addEventListener('change', async (event) => {
   if (!event.target.matches('.todo-status')) return;
   const item = event.target.closest('.todo');
-  const title =
-    item.querySelector('.todo-edit-input')?.value.trim() ||
-    item.querySelector('.todo-title').textContent.trim();
-  try {
-    await request(`/todos/${item.dataset.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ title, status: event.target.value }),
-    });
-    show('状態を更新しました');
-    await load();
-  } catch (error) {
-    if (error.status === 401)
-      return showAuth('セッションが切れました。パスキーでログインしてください。');
-    show(`状態の更新に失敗しました（${error.message}）`, true);
-    await load();
+  if (item) await updateStatus(item.dataset.id, event.target.value);
+});
+list.addEventListener('dragstart', (event) => {
+  const item = event.target.closest('.todo');
+  if (!item || event.target.closest('button, input, select') || statusBusy) {
+    event.preventDefault();
+    return;
   }
+  draggedTodoID = item.dataset.id;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', draggedTodoID);
+  item.classList.add('is-dragging');
+});
+list.addEventListener('dragover', (event) => {
+  const column = event.target.closest('.kanban-column');
+  if (!column || !draggedTodoID || statusBusy) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  list.querySelectorAll('.is-drop-target').forEach((target) => {
+    if (target !== column) target.classList.remove('is-drop-target');
+  });
+  column.classList.add('is-drop-target');
+});
+list.addEventListener('drop', async (event) => {
+  const column = event.target.closest('.kanban-column');
+  if (!column || !draggedTodoID) return;
+  event.preventDefault();
+  const id = draggedTodoID;
+  clearDrag();
+  await updateStatus(id, column.dataset.status);
+});
+list.addEventListener('dragend', clearDrag);
+list.addEventListener('dragleave', (event) => {
+  const column = event.target.closest('.kanban-column');
+  if (column && !column.contains(event.relatedTarget)) column.classList.remove('is-drop-target');
 });
 list.addEventListener('click', async (event) => {
   const item = event.target.closest('.todo');
@@ -288,18 +370,6 @@ list.addEventListener('click', async (event) => {
     if (error.status === 401)
       return showAuth('セッションが切れました。パスキーでログインしてください。');
     show(`操作に失敗しました（${error.message}）`, true);
-  }
-});
-document.querySelector('#health-button').addEventListener('click', async () => {
-  const status = document.querySelector('#health-status');
-  status.textContent = '確認中…';
-  try {
-    await request('/health');
-    status.textContent = '接続OK';
-    status.style.color = '#16816d';
-  } catch {
-    status.textContent = '接続失敗';
-    status.style.color = '#c34e4e';
   }
 });
 document.querySelector('#logout-button').addEventListener('click', async (event) => {
