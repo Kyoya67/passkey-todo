@@ -51,7 +51,7 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 ## internal/router
 
-`router.go`では、次の観点をテストしている。生成されたルーティングから登録HandlerとHealth APIへ到達すること、既存TODOルートが登録されていること、埋め込みOpenAPI定義が有効であることを確認する。
+`router.go`では、次の観点をテストしている。渡された登録HandlerとTODO Handlerが生成ルーティングへ接続され、Health APIへ到達すること、TODOルートが登録されていること、埋め込みOpenAPI定義が有効であることを確認する。RepositoryとServiceの組み立ては`cmd/api/main.go`が担当する。
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
@@ -106,7 +106,7 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 ## カバレッジ計測結果
 
-以下の表はIssue #5時点の旧パッケージ構成で計測した履歴。現行のTODO単一パッケージの単体テストカバレッジは92.9%。
+以下の表はIssue #5時点の旧パッケージ構成で計測した履歴。現行の単体テスト計測（`go test ./... -cover`）では、TODO 92.9%、auth 68.6%、config 100.0%、router 100.0%、database 22.2%だった。外部DB・Redisを使う統合テストは環境変数未指定時にスキップされるため、これは統合テスト込みの値ではない。
 
 単体テストの計測コマンド：`go test ./... -coverprofile=coverage.out`、`go tool cover -func=coverage.out`
 

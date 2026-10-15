@@ -15,6 +15,7 @@ import (
 	sqlc "github.com/catechlounge/kyoya67-todo/backend/internal/database/sqlc"
 	"github.com/catechlounge/kyoya67-todo/backend/internal/middleware"
 	"github.com/catechlounge/kyoya67-todo/backend/internal/router"
+	"github.com/catechlounge/kyoya67-todo/backend/internal/todo"
 )
 
 func main() {
@@ -32,11 +33,13 @@ func main() {
 	defer pool.Close()
 
 	queries := sqlc.New(pool)
+	todoRepository := todo.NewTodoRepository(queries)
+	todoService := todo.NewTodoService(todoRepository)
+	todoHandler := todo.NewTodoHandler(todoService)
 
 	e := echo.New()
 	e.Use(middleware.CORS(cfg.CORSAllowedOrigins))
 
-	var authService *auth.Service
 	authHandler := auth.NewHandler(nil, "")
 	if cfg.WebAuthnRPID != "" {
 		redisOptions := &redis.Options{Addr: cfg.RedisAddress}
@@ -55,10 +58,10 @@ func main() {
 		if err != nil {
 			log.Fatalf("configure WebAuthn: %v", err)
 		}
-		authService = auth.NewService(verifier, auth.NewRepository(pool), auth.NewChallengeStore(redisClient))
+		authService := auth.NewService(verifier, auth.NewRepository(pool), auth.NewChallengeStore(redisClient))
 		authHandler = auth.NewHandler(authService, cfg.WebAuthnOrigin)
 	}
-	router.Register(e, queries, authHandler)
+	router.Register(e, todoHandler, authHandler)
 
 	e.Logger.Fatal(e.Start(":" + cfg.AppPort))
 }

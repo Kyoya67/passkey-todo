@@ -11,6 +11,7 @@ import (
 
 	"github.com/catechlounge/kyoya67-todo/backend/internal/auth"
 	"github.com/catechlounge/kyoya67-todo/backend/internal/openapi"
+	"github.com/catechlounge/kyoya67-todo/backend/internal/todo"
 )
 
 type registrationService struct{}
@@ -24,7 +25,7 @@ func (registrationService) FinishRegistration(context.Context, string, *protocol
 
 func TestRegister(t *testing.T) {
 	e := echo.New()
-	Register(e, nil, auth.NewHandler(registrationService{}, "http://localhost:3000"))
+	Register(e, todo.NewTodoHandler(nil), auth.NewHandler(registrationService{}, "http://localhost:3000"))
 	for _, tc := range []struct {
 		method, path string
 		status       int
