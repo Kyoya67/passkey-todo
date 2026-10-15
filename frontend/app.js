@@ -278,6 +278,20 @@ document.querySelector('#health-button').addEventListener('click', async () => {
     status.style.color = '#c34e4e';
   }
 });
+document.querySelector('#logout-button').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await request('/auth/logout', { method: 'POST' });
+    searchTitle.value = '';
+    message.textContent = '';
+    showAuth();
+  } catch (error) {
+    show(`ログアウトに失敗しました（${error.message}）`, true);
+  } finally {
+    button.disabled = false;
+  }
+});
 load().then((loaded) => {
   if (loaded) showTodoApp();
   else if (!authDialog.open) showAuth('TODOを読み込めませんでした。API接続を確認してください。');

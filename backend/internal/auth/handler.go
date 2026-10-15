@@ -8,6 +8,7 @@ import (
 	"mime"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/labstack/echo/v4"
@@ -90,6 +91,7 @@ func (h *Handler) checkOrigin(c echo.Context) error {
 type LoginServiceAPI interface {
 	BeginLogin(context.Context) (string, *protocol.CredentialAssertion, error)
 	FinishLogin(context.Context, string, *protocol.ParsedCredentialAssertionData) (string, error)
+	Logout(context.Context, string) error
 }
 
 func (h *Handler) BeginLogin(c echo.Context) error {
@@ -153,6 +155,27 @@ func (h *Handler) FinishLogin(c echo.Context) error {
 		Name: "todo_session", Value: token, Path: "/",
 		MaxAge: int(sessionLifetime.Seconds()), HttpOnly: true,
 		Secure: strings.HasPrefix(h.origin, "https://"), SameSite: http.SameSiteStrictMode,
+	})
+	c.Response().Header().Set("Cache-Control", "no-store")
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (h *Handler) Logout(c echo.Context) error {
+	if err := h.checkOrigin(c); err != nil {
+		return err
+	}
+	if h.loginService == nil {
+		return c.NoContent(http.StatusServiceUnavailable)
+	}
+	if cookie, err := c.Cookie("todo_session"); err == nil {
+		if err := h.loginService.Logout(c.Request().Context(), cookie.Value); err != nil && !errors.Is(err, ErrSessionNotFound) {
+			c.Logger().Error("auth logout failed: stage=session_store")
+			return c.NoContent(http.StatusServiceUnavailable)
+		}
+	}
+	http.SetCookie(c.Response(), &http.Cookie{
+		Name: "todo_session", Path: "/", MaxAge: -1, Expires: time.Unix(1, 0),
+		HttpOnly: true, Secure: strings.HasPrefix(h.origin, "https://"), SameSite: http.SameSiteStrictMode,
 	})
 	c.Response().Header().Set("Cache-Control", "no-store")
 	return c.NoContent(http.StatusNoContent)

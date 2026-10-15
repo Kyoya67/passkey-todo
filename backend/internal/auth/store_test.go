@@ -15,6 +15,7 @@ import (
 type fakeChallengeRedis struct {
 	values map[string]string
 	ttl    map[string]time.Duration
+	delErr error
 }
 
 func (f *fakeChallengeRedis) SetNX(_ context.Context, key string, value interface{}, ttl time.Duration) *redis.BoolCmd {
@@ -48,6 +49,20 @@ func (f *fakeChallengeRedis) Get(_ context.Context, key string) *redis.StringCmd
 		return redis.NewStringResult("", redis.Nil)
 	}
 	return redis.NewStringResult(value, nil)
+}
+
+func (f *fakeChallengeRedis) Del(_ context.Context, keys ...string) *redis.IntCmd {
+	if f.delErr != nil {
+		return redis.NewIntResult(0, f.delErr)
+	}
+	var deleted int64
+	for _, key := range keys {
+		if _, found := f.values[key]; found {
+			delete(f.values, key)
+			deleted++
+		}
+	}
+	return redis.NewIntResult(deleted, nil)
 }
 
 func TestLoginStores(t *testing.T) {
@@ -97,6 +112,23 @@ func TestLoginStores(t *testing.T) {
 	if got, err := sessions.Load(ctx, token); err != nil || got != userID {
 		t.Fatalf("load: id=%v err=%v", got, err)
 	}
+	if err := sessions.Revoke(ctx, token); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sessions.Load(ctx, token); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("revoked session still valid: %v", err)
+	}
+	if err := sessions.Revoke(ctx, token); err != nil {
+		t.Fatalf("repeated revoke: %v", err)
+	}
+	if err := sessions.Revoke(ctx, "bad"); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("invalid token: %v", err)
+	}
+	client.delErr = errors.New("redis failure")
+	if err := sessions.Revoke(ctx, token); !errors.Is(err, client.delErr) {
+		t.Fatalf("redis failure: %v", err)
+	}
+	client.delErr = nil
 	for _, invalid := range []string{"", "!", "YQ"} {
 		if _, err := sessions.Load(ctx, invalid); !errors.Is(err, ErrSessionNotFound) {
 			t.Fatalf("invalid token %q: %v", invalid, err)
@@ -161,5 +193,11 @@ func TestLoginStoresIntegration(t *testing.T) {
 	}
 	if got, err := sessionStore.Load(ctx, lookupToken); err != nil || got != id {
 		t.Fatalf("load: id=%v err=%v", got, err)
+	}
+	if err := sessionStore.Revoke(ctx, lookupToken); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sessionStore.Load(ctx, lookupToken); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("revoked session: %v", err)
 	}
 }

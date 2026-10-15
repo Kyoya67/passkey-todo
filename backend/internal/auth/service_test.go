@@ -316,15 +316,36 @@ func (f *fakeLoginChallenges) Consume(_ context.Context, hash [32]byte) (webauth
 }
 
 type fakeLoginSessions struct {
-	calls  int
-	userID [16]byte
-	err    error
+	calls       int
+	userID      [16]byte
+	err         error
+	revokeToken string
 }
 
 func (f *fakeLoginSessions) Save(_ context.Context, _ [32]byte, id [16]byte) error {
 	f.calls++
 	f.userID = id
 	return f.err
+}
+
+func (f *fakeLoginSessions) Revoke(_ context.Context, token string) error {
+	f.revokeToken = token
+	return f.err
+}
+
+func TestLogoutService(t *testing.T) {
+	if err := NewService(nil, nil, nil).Logout(context.Background(), "token"); err == nil {
+		t.Fatal("missing session store accepted")
+	}
+	sessions := &fakeLoginSessions{}
+	svc := NewService(nil, nil, nil, WithLogin(nil, nil, nil, sessions))
+	if err := svc.Logout(context.Background(), "session-token"); err != nil || sessions.revokeToken != "session-token" {
+		t.Fatalf("logout token=%q err=%v", sessions.revokeToken, err)
+	}
+	sessions.err = errors.New("redis failed")
+	if err := svc.Logout(context.Background(), "session-token"); !errors.Is(err, sessions.err) {
+		t.Fatalf("logout error=%v", err)
+	}
 }
 
 func TestLoginService(t *testing.T) {

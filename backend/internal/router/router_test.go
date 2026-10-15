@@ -49,16 +49,19 @@ func TestRegister(t *testing.T) {
 	if err := spec.Validate(context.Background()); err != nil {
 		t.Fatalf("invalid OpenAPI: %v", err)
 	}
-	loginFound, todoFound := false, false
+	loginFound, logoutFound, todoFound := false, false, false
 	for _, route := range e.Routes() {
 		if route.Path == "/auth/login/begin" && route.Method == http.MethodPost {
 			loginFound = true
+		}
+		if route.Path == "/auth/logout" && route.Method == http.MethodPost {
+			logoutFound = true
 		}
 		if route.Path == "/todos" && route.Method == http.MethodGet {
 			todoFound = true
 		}
 	}
-	if !loginFound || !todoFound {
-		t.Fatalf("missing routes: login=%t todo=%t", loginFound, todoFound)
+	if !loginFound || !logoutFound || !todoFound {
+		t.Fatalf("missing routes: login=%t logout=%t todo=%t", loginFound, logoutFound, todoFound)
 	}
 }

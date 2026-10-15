@@ -162,6 +162,14 @@ type loginChallenges interface {
 
 type loginSessions interface {
 	Save(context.Context, [32]byte, [16]byte) error
+	Revoke(context.Context, string) error
+}
+
+func (s *Service) Logout(ctx context.Context, token string) error {
+	if s.sessions == nil {
+		return errors.New("session store is not configured")
+	}
+	return s.sessions.Revoke(ctx, token)
 }
 
 func (s *Service) BeginLogin(ctx context.Context) (string, *protocol.CredentialAssertion, error) {

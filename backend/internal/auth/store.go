@@ -23,6 +23,7 @@ var ErrSessionNotFound = errors.New("session not found or expired")
 type sessionRedis interface {
 	SetNX(context.Context, string, interface{}, time.Duration) *redis.BoolCmd
 	Get(context.Context, string) *redis.StringCmd
+	Del(context.Context, ...string) *redis.IntCmd
 }
 
 type LoginStore struct{ client challengeRedis }
@@ -102,4 +103,17 @@ func (s *SessionStore) Load(ctx context.Context, token string) ([16]byte, error)
 	var userID [16]byte
 	copy(userID[:], data)
 	return userID, nil
+}
+
+// Revoke removes the server-side session. Deleting an expired key is harmless.
+func (s *SessionStore) Revoke(ctx context.Context, token string) error {
+	raw, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(raw) != 32 {
+		return ErrSessionNotFound
+	}
+	hash := sha256.Sum256(raw)
+	if err := s.client.Del(ctx, sessionKey(hash)).Err(); err != nil {
+		return fmt.Errorf("revoke session: %w", err)
+	}
+	return nil
 }

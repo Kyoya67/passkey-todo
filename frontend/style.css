@@ -77,6 +77,12 @@ body {
 .hero {
   padding: 20px 8px 40px;
 }
+.hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
 .eyebrow {
   margin: 0 0 12px;
   color: #16816d;

@@ -181,6 +181,9 @@ type fakeLoginServiceAPI struct {
 	finishCalls int
 	token       string
 	err         error
+	logoutCalls int
+	logoutToken string
+	logoutErr   error
 }
 
 func (f *fakeLoginServiceAPI) BeginLogin(context.Context) (string, *protocol.CredentialAssertion, error) {
@@ -189,6 +192,11 @@ func (f *fakeLoginServiceAPI) BeginLogin(context.Context) (string, *protocol.Cre
 func (f *fakeLoginServiceAPI) FinishLogin(context.Context, string, *protocol.ParsedCredentialAssertionData) (string, error) {
 	f.finishCalls++
 	return f.token, f.err
+}
+func (f *fakeLoginServiceAPI) Logout(_ context.Context, token string) error {
+	f.logoutCalls++
+	f.logoutToken = token
+	return f.logoutErr
 }
 
 func TestLoginHandlerBegin(t *testing.T) {
@@ -304,5 +312,66 @@ func TestLoginHandlerFinish(t *testing.T) {
 	}
 	if strings.Contains(logs.String(), "private secret") || strings.Contains(logs.String(), "session-token") {
 		t.Fatal("sensitive value appeared in login logs")
+	}
+}
+
+func TestLogoutHandler(t *testing.T) {
+	withoutService := NewHandler(nil, nil, "http://localhost:3000")
+	missingServiceContext := echo.New().NewContext(httptest.NewRequest(http.MethodPost, "/auth/logout", nil), httptest.NewRecorder())
+	missingServiceContext.Request().Header.Set(echo.HeaderOrigin, "http://localhost:3000")
+	if err := withoutService.Logout(missingServiceContext); err != nil || missingServiceContext.Response().Status != http.StatusServiceUnavailable {
+		t.Fatalf("unconfigured logout: status=%d err=%v", missingServiceContext.Response().Status, err)
+	}
+	for _, tc := range []struct {
+		name, origin, token   string
+		serviceErr            error
+		wantStatus, wantCalls int
+		wantCookie            bool
+	}{
+		{"valid session", "http://localhost:3000", "session-token", nil, 204, 1, true},
+		{"no session", "http://localhost:3000", "", nil, 204, 0, true},
+		{"expired session", "http://localhost:3000", "session-token", ErrSessionNotFound, 204, 1, true},
+		{"wrong origin", "https://evil.example", "session-token", nil, 403, 0, false},
+		{"redis failure", "http://localhost:3000", "session-token", errors.New("private redis failure"), 503, 1, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			service := &fakeLoginServiceAPI{logoutErr: tc.serviceErr}
+			handler := NewHandler(nil, service, "http://localhost:3000")
+			e := echo.New()
+			e.POST("/auth/logout", handler.Logout)
+			request := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+			request.Header.Set(echo.HeaderOrigin, tc.origin)
+			if tc.token != "" {
+				request.AddCookie(&http.Cookie{Name: "todo_session", Value: tc.token})
+			}
+			response := httptest.NewRecorder()
+			e.ServeHTTP(response, request)
+			if response.Code != tc.wantStatus || service.logoutCalls != tc.wantCalls || service.logoutToken != func() string {
+				if tc.wantCalls == 0 {
+					return ""
+				}
+				return tc.token
+			}() {
+				t.Fatalf("status=%d calls=%d token=%q", response.Code, service.logoutCalls, service.logoutToken)
+			}
+			cookies := response.Result().Cookies()
+			if tc.wantCookie {
+				if len(cookies) != 1 || cookies[0].Name != "todo_session" || cookies[0].Path != "/" || cookies[0].MaxAge >= 0 || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode || response.Header().Get("Cache-Control") != "no-store" {
+					t.Fatalf("cookie=%+v", cookies)
+				}
+			} else if len(cookies) != 0 {
+				t.Fatalf("unexpected cookie=%+v", cookies)
+			}
+		})
+	}
+	secureHandler := NewHandler(nil, &fakeLoginServiceAPI{}, "https://ca-techlounge-todo.kyo8.dev")
+	e := echo.New()
+	e.POST("/auth/logout", secureHandler.Logout)
+	request := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	request.Header.Set(echo.HeaderOrigin, "https://ca-techlounge-todo.kyo8.dev")
+	response := httptest.NewRecorder()
+	e.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || len(response.Result().Cookies()) != 1 || !response.Result().Cookies()[0].Secure {
+		t.Fatalf("cloud logout cookie must be secure: %d", response.Code)
 	}
 }
