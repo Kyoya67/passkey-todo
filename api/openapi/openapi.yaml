@@ -155,12 +155,8 @@ paths:
             schema:
               $ref: '#/components/schemas/TodoRequest'
       responses:
-        '201':
+        '204':
           description: TODOを作成した
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Todo'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -212,12 +208,8 @@ paths:
             schema:
               $ref: '#/components/schemas/TodoRequest'
       responses:
-        '200':
+        '204':
           description: TODOを更新した
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Todo'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -246,6 +238,35 @@ paths:
           $ref: '#/components/responses/NotFound'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /todos/{id}/position:
+    put:
+      tags:
+        - todos
+      security:
+        - todoSession: []
+      summary: TODOを同じ状態・優先度のグループ内で並べ替える
+      description: 未着手・進行中のTODOのみ並べ替えられる。beforeIdを指定するとそのTODOの直前へ、省略またはnullの場合はグループ末尾へ移動する。完了したTODOや別の状態・優先度のTODOは指定できない
+      operationId: moveTodo
+      parameters:
+        - $ref: '#/components/parameters/TodoID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveTodoRequest'
+      responses:
+        '204':
+          description: 並び順を更新した
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
@@ -450,11 +471,28 @@ components:
           example: 買い物をする
         status:
           $ref: '#/components/schemas/TodoStatus'
+        priorityLevel:
+          $ref: '#/components/schemas/TodoPriorityLevel'
+
+    MoveTodoRequest:
+      type: object
+      properties:
+        beforeId:
+          type: integer
+          format: int64
+          nullable: true
+          minimum: 1
+          description: 移動先の直後にある同じ状態・優先度グループのTODOのID。省略時はグループ末尾へ移動する
 
     TodoStatus:
       type: string
       description: 未着手・進行中・完了。省略時は未着手
       enum: [not_started, in_progress, completed]
+
+    TodoPriorityLevel:
+      type: string
+      description: 未着手・進行中で使用する優先度（high=高、medium=中、low=小）。省略時は中。完了列では順位付けに使用しない
+      enum: [high, medium, low]
 
     Todo:
       type: object
@@ -462,6 +500,8 @@ components:
         - id
         - title
         - status
+        - priority
+        - priorityLevel
         - createdAt
         - updatedAt
       properties:
@@ -474,6 +514,12 @@ components:
           example: 買い物をする
         status:
           $ref: '#/components/schemas/TodoStatus'
+        priority:
+          type: integer
+          format: int64
+          description: 同じ状態・優先度グループ内の順位。小さいほど上。完了では使用しない
+        priorityLevel:
+          $ref: '#/components/schemas/TodoPriorityLevel'
         createdAt:
           type: string
           format: date-time

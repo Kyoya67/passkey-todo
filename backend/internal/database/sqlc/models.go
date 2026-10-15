@@ -17,12 +17,14 @@ type PasskeyCredential struct {
 }
 
 type Todo struct {
-	ID        int64              `json:"id"`
-	Title     string             `json:"title"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	UserID    pgtype.UUID        `json:"user_id"`
-	Status    string             `json:"status"`
+	ID            int64              `json:"id"`
+	Title         string             `json:"title"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	UserID        pgtype.UUID        `json:"user_id"`
+	Status        string             `json:"status"`
+	Priority      int64              `json:"priority"`
+	PriorityLevel string             `json:"priority_level"`
 }
 
 type User struct {

@@ -33,7 +33,7 @@ func TestRepositoryIntegration(t *testing.T) {
 		t.Fatalf("ping database: %v", err)
 	}
 
-	repository := NewRepository(sqlc.New(pool))
+	repository := NewRepository(sqlc.New(pool), pool)
 	var ownerA, ownerB [16]byte
 	if _, err := rand.Read(ownerA[:]); err != nil {
 		t.Fatal(err)
@@ -53,7 +53,7 @@ func TestRepositoryIntegration(t *testing.T) {
 	}
 	title := "integration-test-" + time.Now().UTC().Format("20060102150405.000000000")
 
-	created, err := repository.Create(ctx, ownerA, title, StatusNotStarted)
+	created, err := repository.Create(ctx, ownerA, title, StatusNotStarted, PriorityMedium)
 	if err != nil {
 		t.Fatalf("create todo: %v", err)
 	}
@@ -72,6 +72,9 @@ func TestRepositoryIntegration(t *testing.T) {
 	if created.Status != StatusNotStarted {
 		t.Fatalf("created status=%q", created.Status)
 	}
+	if created.Priority < 1 {
+		t.Fatalf("created priority=%d", created.Priority)
+	}
 	if !created.CreatedAt.Time.Equal(created.UpdatedAt.Time) {
 		t.Fatalf("created and updated timestamps differ: created=%v updated=%v", created.CreatedAt.Time, created.UpdatedAt.Time)
 	}
@@ -86,6 +89,52 @@ func TestRepositoryIntegration(t *testing.T) {
 	if list[0].Status != StatusNotStarted {
 		t.Fatalf("listed status=%q", list[0].Status)
 	}
+	second, err := repository.Create(ctx, ownerA, title, StatusNotStarted, PriorityMedium)
+	if err != nil {
+		t.Fatalf("create second todo: %v", err)
+	}
+	defer repository.Delete(ctx, ownerA, second.ID)
+	if second.Priority <= created.Priority {
+		t.Fatalf("priority order: first=%d second=%d", created.Priority, second.Priority)
+	}
+	high, err := repository.Create(ctx, ownerA, title, StatusNotStarted, PriorityHigh)
+	if err != nil {
+		t.Fatalf("create high priority todo: %v", err)
+	}
+	defer repository.Delete(ctx, ownerA, high.ID)
+	if high.PriorityLevel != PriorityHigh || high.Priority != 1 {
+		t.Fatalf("high priority group should start at rank 1: %+v", high)
+	}
+	if err := repository.Move(ctx, ownerA, second.ID, &high.ID); !errors.Is(err, ErrInvalidPosition) {
+		t.Fatalf("cross-priority anchor must fail: %v", err)
+	}
+	changed, err := repository.Update(ctx, ownerA, high.ID, title, StatusNotStarted, PriorityLow)
+	if err != nil || changed.PriorityLevel != PriorityLow || changed.Priority != 1 {
+		t.Fatalf("move to low priority group: %+v err=%v", changed, err)
+	}
+	if err := repository.Move(ctx, ownerA, second.ID, &high.ID); !errors.Is(err, ErrInvalidPosition) {
+		t.Fatalf("cross-priority anchor after update must fail: %v", err)
+	}
+	if err := repository.Delete(ctx, ownerA, high.ID); err != nil {
+		t.Fatalf("delete low priority todo: %v", err)
+	}
+	if err := repository.Move(ctx, ownerA, second.ID, &created.ID); err != nil {
+		t.Fatalf("move before first: %v", err)
+	}
+	ordered, err := repository.List(ctx, ownerA, title, 10, 0)
+	if err != nil || len(ordered) != 2 || ordered[0].ID != second.ID || ordered[1].ID != created.ID {
+		t.Fatalf("reordered todos=%+v err=%v", ordered, err)
+	}
+	if err := repository.Move(ctx, ownerB, second.ID, nil); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("other owner must not move todo: %v", err)
+	}
+	if err := repository.Move(ctx, ownerA, second.ID, nil); err != nil {
+		t.Fatalf("move to end: %v", err)
+	}
+	ordered, err = repository.List(ctx, ownerA, title, 10, 0)
+	if err != nil || ordered[1].ID != second.ID {
+		t.Fatalf("append order=%+v err=%v", ordered, err)
+	}
 	_, err = pool.Exec(ctx, "INSERT INTO todos (title, user_id, status) VALUES ($1, $2, $3)", title, pgtype.UUID{Bytes: ownerA, Valid: true}, "invalid")
 	var statusErr *pgconn.PgError
 	if !errors.As(err, &statusErr) || statusErr.Code != "23514" {
@@ -95,7 +144,7 @@ func TestRepositoryIntegration(t *testing.T) {
 	if err != nil || len(otherList) != 0 {
 		t.Fatalf("other user list=%+v err=%v", otherList, err)
 	}
-	if _, err := repository.Update(ctx, ownerB, created.ID, "forbidden", ""); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := repository.Update(ctx, ownerB, created.ID, "forbidden", "", ""); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("other user update: %v", err)
 	}
 	if err := repository.Delete(ctx, ownerB, created.ID); !errors.Is(err, pgx.ErrNoRows) {
@@ -109,7 +158,7 @@ func TestRepositoryIntegration(t *testing.T) {
 
 	time.Sleep(2 * time.Millisecond)
 	updatedTitle := title + "-updated"
-	updated, err := repository.Update(ctx, ownerA, created.ID, updatedTitle, StatusCompleted)
+	updated, err := repository.Update(ctx, ownerA, created.ID, updatedTitle, StatusCompleted, "")
 	if err != nil {
 		t.Fatalf("update todo: %v", err)
 	}
@@ -119,16 +168,30 @@ func TestRepositoryIntegration(t *testing.T) {
 	if updated.Status != StatusCompleted {
 		t.Fatalf("updated status=%q", updated.Status)
 	}
-	retained, err := repository.Update(ctx, ownerA, created.ID, updatedTitle, "")
+	if err := repository.Move(ctx, ownerA, second.ID, &created.ID); !errors.Is(err, ErrInvalidPosition) {
+		t.Fatalf("cross-status anchor must fail: %v", err)
+	}
+	retained, err := repository.Update(ctx, ownerA, created.ID, updatedTitle, "", "")
 	if err != nil || retained.Status != StatusCompleted {
 		t.Fatalf("retained status=%q err=%v", retained.Status, err)
+	}
+	time.Sleep(2 * time.Millisecond)
+	if _, err := repository.Update(ctx, ownerA, second.ID, title, StatusCompleted, ""); err != nil {
+		t.Fatalf("complete second todo: %v", err)
+	}
+	completed, err := repository.List(ctx, ownerA, title, 10, 0)
+	if err != nil || len(completed) != 2 || completed[0].ID != second.ID {
+		t.Fatalf("completed todos must be sorted by recent update: %+v err=%v", completed, err)
+	}
+	if err := repository.Move(ctx, ownerA, second.ID, &created.ID); !errors.Is(err, ErrInvalidPosition) {
+		t.Fatalf("completed todo must not be reordered: %v", err)
 	}
 
 	if err := repository.Delete(ctx, ownerA, created.ID); err != nil {
 		t.Fatalf("delete todo: %v", err)
 	}
 	deleted = true
-	if _, err := repository.Update(ctx, ownerA, created.ID, "deleted", ""); err == nil {
+	if _, err := repository.Update(ctx, ownerA, created.ID, "deleted", "", ""); err == nil {
 		t.Fatal("expected update after delete to fail")
 	}
 }

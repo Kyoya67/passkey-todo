@@ -195,8 +195,6 @@ APIの具体的なURL、リクエスト・レスポンス形式、入力検証�
 
 仕様書と実装の齟齬をなくすため`oapi-codegen`を利用して、`api/openapi/openapi.yaml`からGoのリクエスト・レスポンスモデル、Echo用のServer Interface、ルーティング登録コード、埋め込み仕様を生成する。生成コードは`backend/internal/openapi/`で管理し、直接編集せず、OpenAPI定義を修正して再生成する。
 
-TODOステータスはフロントエンドで未着手・進行中・完了の3列に表示する。作成時は状態を指定せず、API側で未着手を初期値にする。既存の静的HTML・CSS・JavaScriptとブラウザ標準のドラッグ＆ドロップAPIを使い、列間の移動をAPIの状態更新につなぐ。3列の移動だけであればReactを導入するほど画面状態は複雑ではない。状態メニューを置かずドラッグ操作に統一し、タッチ操作は長押し後にドラッグできるようにする。更新が失敗した場合は最後に取得したデータに表示を戻す。
-
 ### 3.6 コンテナ実行環境
 
 | 採用 | 技術 | 判断理由 |
@@ -264,6 +262,9 @@ erDiagram
         BIGSERIAL id PK
         UUID user_id FK "NOT NULL"
         TEXT title
+        TEXT status
+        TEXT priority_level "高・中・小"
+        BIGINT priority "状態・優先度グループ内の表示順"
         TIMESTAMPTZ created_at
         TIMESTAMPTZ updated_at
     }
@@ -277,7 +278,7 @@ erDiagram
     }
 `````
 
-`users`はユーザーのIDと作成日時を管理する。`passkey_credentials`はユーザーに紐づくパスキーの公開鍵など、検証に必要な認証情報を保存する。`todos`は所有者ID、タイトル、作成・更新日時を保存し、ユーザーごとに参照する。
+`users`はユーザーのIDと作成日時を管理する。`passkey_credentials`はユーザーに紐づくパスキーの公開鍵など、検証に必要な認証情報を保存する。`todos`は所有者ID、タイトル、状態、優先度（高・中・小）、状態・優先度グループ内の順位、作成・更新日時を保存し、ユーザーごとに参照する。
 
 ### 4.2 パスキー認証
 

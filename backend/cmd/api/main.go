@@ -33,7 +33,7 @@ func main() {
 	defer pool.Close()
 
 	queries := sqlc.New(pool)
-	todoRepository := todo.NewRepository(queries)
+	todoRepository := todo.NewRepository(queries, pool)
 	todoService := todo.NewService(todoRepository)
 	todoHandler := todo.NewHandler(todoService)
 
