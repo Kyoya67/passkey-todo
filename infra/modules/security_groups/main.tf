@@ -60,3 +60,17 @@ resource "aws_security_group" "rds" {
   }
   tags = var.tags
 }
+
+resource "aws_security_group" "redis" {
+  name   = "${var.name}-redis"
+  vpc_id = var.vpc_id
+
+  ingress {
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs.id]
+  }
+
+  tags = var.tags
+}

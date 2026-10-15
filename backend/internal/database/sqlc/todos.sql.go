@@ -7,40 +7,66 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createTodo = `-- name: CreateTodo :one
 INSERT INTO todos (
-    title
+    title, user_id, status, priority_level, priority
 ) VALUES (
-    $1
+    $1, $2::uuid, $3, $4,
+    (SELECT COALESCE(MAX(priority), 0) + 1 FROM todos
+     WHERE user_id = $2::uuid AND status = $3
+       AND priority_level = $4)
 )
-RETURNING id, title, created_at, updated_at
+RETURNING id, title, created_at, updated_at, user_id, status, priority, priority_level
 `
 
-func (q *Queries) CreateTodo(ctx context.Context, title string) (Todo, error) {
-	row := q.db.QueryRow(ctx, createTodo, title)
+type CreateTodoParams struct {
+	Title         string      `json:"title"`
+	OwnerID       pgtype.UUID `json:"owner_id"`
+	Status        string      `json:"status"`
+	PriorityLevel string      `json:"priority_level"`
+}
+
+func (q *Queries) CreateTodo(ctx context.Context, arg CreateTodoParams) (Todo, error) {
+	row := q.db.QueryRow(ctx, createTodo,
+		arg.Title,
+		arg.OwnerID,
+		arg.Status,
+		arg.PriorityLevel,
+	)
 	var i Todo
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserID,
+		&i.Status,
+		&i.Priority,
+		&i.PriorityLevel,
 	)
 	return i, err
 }
 
 const deleteTodo = `-- name: DeleteTodo :one
 DELETE FROM todos
-WHERE id = $1
+WHERE id = $1 AND user_id = $2::uuid
 RETURNING id
 `
 
-func (q *Queries) DeleteTodo(ctx context.Context, id int64) (int64, error) {
-	row := q.db.QueryRow(ctx, deleteTodo, id)
-	var id_2 int64
-	err := row.Scan(&id_2)
-	return id_2, err
+type DeleteTodoParams struct {
+	TodoID  int64       `json:"todo_id"`
+	OwnerID pgtype.UUID `json:"owner_id"`
+}
+
+func (q *Queries) DeleteTodo(ctx context.Context, arg DeleteTodoParams) (int64, error) {
+	row := q.db.QueryRow(ctx, deleteTodo, arg.TodoID, arg.OwnerID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const listTodos = `-- name: ListTodos :many
@@ -48,22 +74,38 @@ SELECT
     id,
     title,
     created_at,
-    updated_at
+    updated_at,
+    user_id,
+    status,
+    priority,
+    priority_level
 FROM todos
-WHERE title ILIKE '%' || $1::text || '%'
-ORDER BY updated_at DESC, id DESC
-LIMIT $3::int
-OFFSET $2::int
+WHERE user_id = $1::uuid
+  AND title ILIKE '%' || $2::text || '%'
+ORDER BY status,
+    CASE WHEN status <> 'completed' THEN CASE priority_level
+        WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END END ASC NULLS LAST,
+    CASE WHEN status <> 'completed' THEN priority END ASC NULLS LAST,
+    CASE WHEN status = 'completed' THEN updated_at END DESC NULLS LAST,
+    id
+LIMIT $4::int
+OFFSET $3::int
 `
 
 type ListTodosParams struct {
-	Title      string `json:"title"`
-	PageOffset int32  `json:"page_offset"`
-	PageLimit  int32  `json:"page_limit"`
+	OwnerID    pgtype.UUID `json:"owner_id"`
+	Title      string      `json:"title"`
+	PageOffset int32       `json:"page_offset"`
+	PageLimit  int32       `json:"page_limit"`
 }
 
 func (q *Queries) ListTodos(ctx context.Context, arg ListTodosParams) ([]Todo, error) {
-	rows, err := q.db.Query(ctx, listTodos, arg.Title, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.Query(ctx, listTodos,
+		arg.OwnerID,
+		arg.Title,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +118,10 @@ func (q *Queries) ListTodos(ctx context.Context, arg ListTodosParams) ([]Todo, e
 			&i.Title,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UserID,
+			&i.Status,
+			&i.Priority,
+			&i.PriorityLevel,
 		); err != nil {
 			return nil, err
 		}
@@ -88,27 +134,49 @@ func (q *Queries) ListTodos(ctx context.Context, arg ListTodosParams) ([]Todo, e
 }
 
 const updateTodo = `-- name: UpdateTodo :one
-UPDATE todos
+UPDATE todos AS target
 SET
-    title = $2,
+    title = $1,
+    priority = CASE WHEN target.status <> COALESCE(NULLIF($2::text, ''), target.status)
+            OR target.priority_level <> COALESCE(NULLIF($3::text, ''), target.priority_level)
+        THEN (SELECT COALESCE(MAX(other.priority), 0) + 1 FROM todos AS other
+              WHERE other.user_id = $4::uuid
+                AND other.status = COALESCE(NULLIF($2::text, ''), target.status)
+                AND other.priority_level = COALESCE(NULLIF($3::text, ''), target.priority_level))
+        ELSE target.priority END,
+    status = COALESCE(NULLIF($2::text, ''), target.status),
+    priority_level = COALESCE(NULLIF($3::text, ''), target.priority_level),
     updated_at = NOW()
-WHERE id = $1
-RETURNING id, title, created_at, updated_at
+WHERE target.id = $5 AND target.user_id = $4::uuid
+RETURNING target.id, target.title, target.created_at, target.updated_at, target.user_id, target.status, target.priority, target.priority_level
 `
 
 type UpdateTodoParams struct {
-	ID    int64  `json:"id"`
-	Title string `json:"title"`
+	Title         string      `json:"title"`
+	Status        string      `json:"status"`
+	PriorityLevel string      `json:"priority_level"`
+	OwnerID       pgtype.UUID `json:"owner_id"`
+	TodoID        int64       `json:"todo_id"`
 }
 
 func (q *Queries) UpdateTodo(ctx context.Context, arg UpdateTodoParams) (Todo, error) {
-	row := q.db.QueryRow(ctx, updateTodo, arg.ID, arg.Title)
+	row := q.db.QueryRow(ctx, updateTodo,
+		arg.Title,
+		arg.Status,
+		arg.PriorityLevel,
+		arg.OwnerID,
+		arg.TodoID,
+	)
 	var i Todo
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserID,
+		&i.Status,
+		&i.Priority,
+		&i.PriorityLevel,
 	)
 	return i, err
 }

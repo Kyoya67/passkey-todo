@@ -15,14 +15,90 @@ import (
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	protocol "github.com/go-webauthn/webauthn/protocol"
 	"github.com/labstack/echo/v4"
 	"github.com/oapi-codegen/runtime"
 )
+
+// Defines values for TodoPriorityLevel.
+const (
+	High   TodoPriorityLevel = "high"
+	Low    TodoPriorityLevel = "low"
+	Medium TodoPriorityLevel = "medium"
+)
+
+// Valid indicates whether the value is a known member of the TodoPriorityLevel enum.
+func (e TodoPriorityLevel) Valid() bool {
+	switch e {
+	case High:
+		return true
+	case Low:
+		return true
+	case Medium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TodoStatus.
+const (
+	Completed  TodoStatus = "completed"
+	InProgress TodoStatus = "in_progress"
+	NotStarted TodoStatus = "not_started"
+)
+
+// Valid indicates whether the value is a known member of the TodoStatus enum.
+func (e TodoStatus) Valid() bool {
+	switch e {
+	case Completed:
+		return true
+	case InProgress:
+		return true
+	case NotStarted:
+		return true
+	default:
+		return false
+	}
+}
 
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
 	// Status Example: ok
 	Status string `json:"status"`
+}
+
+// LoginOptions defines model for LoginOptions.
+type LoginOptions struct {
+	// LoginId ログイン完了に必要なランダムトークン
+	LoginId string                       `json:"loginId"`
+	Options protocol.CredentialAssertion `json:"options"`
+}
+
+// LoginRequest defines model for LoginRequest.
+type LoginRequest struct {
+	Credential protocol.CredentialAssertionResponse `json:"credential"`
+	LoginId    string                               `json:"loginId"`
+}
+
+// MoveTodoRequest defines model for MoveTodoRequest.
+type MoveTodoRequest struct {
+	// BeforeId 移動先の直後にあるTODOのID。省略時は列末尾へ移動する
+	BeforeId *int64 `json:"beforeId,omitempty"`
+}
+
+// RegistrationOptions defines model for RegistrationOptions.
+type RegistrationOptions struct {
+	Options WebAuthnCreationOptions `json:"options"`
+
+	// RegistrationId 登録完了に必要なランダムトークン。ログへ記録しない。
+	RegistrationId string `json:"registrationId"`
+}
+
+// RegistrationRequest defines model for RegistrationRequest.
+type RegistrationRequest struct {
+	Credential     WebAuthnCredential `json:"credential"`
+	RegistrationId string             `json:"registrationId"`
 }
 
 // Todo defines model for Todo.
@@ -31,6 +107,15 @@ type Todo struct {
 
 	// Id Example: 1
 	Id int64 `json:"id"`
+
+	// Priority 同じ状態・優先度グループ内の順位。小さいほど上。完了では使用しない
+	Priority int64 `json:"priority"`
+
+	// PriorityLevel 未着手・進行中で使用する優先度。省略時は中。完了列では順位付けに使用しない
+	PriorityLevel TodoPriorityLevel `json:"priorityLevel"`
+
+	// Status 未着手・進行中・完了。省略時は未着手
+	Status TodoStatus `json:"status"`
 
 	// Title Example: 買い物をする
 	Title     string    `json:"title"`
@@ -42,13 +127,31 @@ type TodoListResponse struct {
 	Todos []Todo `json:"todos"`
 }
 
+// TodoPriorityLevel 未着手・進行中で使用する優先度。省略時は中。完了列では順位付けに使用しない
+type TodoPriorityLevel string
+
 // TodoRequest defines model for TodoRequest.
 type TodoRequest struct {
+	// PriorityLevel 未着手・進行中で使用する優先度。省略時は中。完了列では順位付けに使用しない
+	PriorityLevel *TodoPriorityLevel `json:"priorityLevel,omitempty"`
+
+	// Status 未着手・進行中・完了。省略時は未着手
+	Status *TodoStatus `json:"status,omitempty"`
+
 	// Title TODOのタイトル
 	//
 	// Example: 買い物をする
 	Title string `json:"title"`
 }
+
+// TodoStatus 未着手・進行中・完了。省略時は未着手
+type TodoStatus string
+
+// WebAuthnCreationOptions defines model for WebAuthnCreationOptions.
+type WebAuthnCreationOptions = protocol.CredentialCreation
+
+// WebAuthnCredential defines model for WebAuthnCredential.
+type WebAuthnCredential = protocol.CredentialCreationResponse
 
 // LimitQuery defines model for LimitQuery.
 type LimitQuery = int32
@@ -74,14 +177,38 @@ type ListTodosParams struct {
 	Offset *OffsetQuery `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// FinishLoginJSONRequestBody defines body for FinishLogin for application/json ContentType.
+type FinishLoginJSONRequestBody = LoginRequest
+
+// FinishRegistrationJSONRequestBody defines body for FinishRegistration for application/json ContentType.
+type FinishRegistrationJSONRequestBody = RegistrationRequest
+
 // CreateTodoJSONRequestBody defines body for CreateTodo for application/json ContentType.
 type CreateTodoJSONRequestBody = TodoRequest
 
 // UpdateTodoJSONRequestBody defines body for UpdateTodo for application/json ContentType.
 type UpdateTodoJSONRequestBody = TodoRequest
 
+// MoveTodoJSONRequestBody defines body for MoveTodo for application/json ContentType.
+type MoveTodoJSONRequestBody = MoveTodoRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// BeginLogin パスキーログインを開始
+	// (POST /auth/login/begin)
+	BeginLogin(ctx echo.Context) error
+	// FinishLogin パスキーログインを完了
+	// (POST /auth/login/finish)
+	FinishLogin(ctx echo.Context) error
+	// Logout ログアウト
+	// (POST /auth/logout)
+	Logout(ctx echo.Context) error
+	// BeginRegistration パスキー登録を開始
+	// (POST /auth/registration/begin)
+	BeginRegistration(ctx echo.Context) error
+	// FinishRegistration パスキー登録を完了
+	// (POST /auth/registration/finish)
+	FinishRegistration(ctx echo.Context) error
 	// GetHealth ヘルスチェック
 	// (GET /health)
 	GetHealth(ctx echo.Context) error
@@ -94,14 +221,62 @@ type ServerInterface interface {
 	// DeleteTodo TODOを削除
 	// (DELETE /todos/{id})
 	DeleteTodo(ctx echo.Context, id TodoID) error
-	// UpdateTodo TODOのタイトルを更新
+	// UpdateTodo TODOのタイトル・状態を更新
 	// (PUT /todos/{id})
 	UpdateTodo(ctx echo.Context, id TodoID) error
+	// MoveTodo TODOを同じ状態・優先度のグループ内で並べ替える
+	// (PUT /todos/{id}/position)
+	MoveTodo(ctx echo.Context, id TodoID) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
 type ServerInterfaceWrapper struct {
 	Handler ServerInterface
+}
+
+// BeginLogin converts echo context to params.
+func (w *ServerInterfaceWrapper) BeginLogin(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.BeginLogin(ctx)
+	return err
+}
+
+// FinishLogin converts echo context to params.
+func (w *ServerInterfaceWrapper) FinishLogin(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.FinishLogin(ctx)
+	return err
+}
+
+// Logout converts echo context to params.
+func (w *ServerInterfaceWrapper) Logout(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.Logout(ctx)
+	return err
+}
+
+// BeginRegistration converts echo context to params.
+func (w *ServerInterfaceWrapper) BeginRegistration(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.BeginRegistration(ctx)
+	return err
+}
+
+// FinishRegistration converts echo context to params.
+func (w *ServerInterfaceWrapper) FinishRegistration(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.FinishRegistration(ctx)
+	return err
 }
 
 // GetHealth converts echo context to params.
@@ -186,6 +361,22 @@ func (w *ServerInterfaceWrapper) UpdateTodo(ctx echo.Context) error {
 	return err
 }
 
+// MoveTodo converts echo context to params.
+func (w *ServerInterfaceWrapper) MoveTodo(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "id" -------------
+	var id TodoID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", ctx.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: ctx.Request().URL.RawPath == ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.MoveTodo(ctx, id)
+	return err
+}
+
 // This is a simple interface which specifies echo.Route addition functions which
 // are present on both echo.Echo and echo.Group, since we want to allow using
 // either of them for path registration
@@ -233,11 +424,17 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 		Handler: si,
 	}
 
+	router.POST(options.BaseURL+"/auth/registration/begin", wrapper.BeginRegistration, options.OperationMiddlewares["beginRegistration"]...)
+	router.POST(options.BaseURL+"/auth/registration/finish", wrapper.FinishRegistration, options.OperationMiddlewares["finishRegistration"]...)
+	router.POST(options.BaseURL+"/auth/login/begin", wrapper.BeginLogin, options.OperationMiddlewares["beginLogin"]...)
+	router.POST(options.BaseURL+"/auth/login/finish", wrapper.FinishLogin, options.OperationMiddlewares["finishLogin"]...)
+	router.POST(options.BaseURL+"/auth/logout", wrapper.Logout, options.OperationMiddlewares["logout"]...)
 	router.GET(options.BaseURL+"/health", wrapper.GetHealth, options.OperationMiddlewares["getHealth"]...)
 	router.GET(options.BaseURL+"/todos", wrapper.ListTodos, options.OperationMiddlewares["listTodos"]...)
 	router.POST(options.BaseURL+"/todos", wrapper.CreateTodo, options.OperationMiddlewares["createTodo"]...)
 	router.DELETE(options.BaseURL+"/todos/:id", wrapper.DeleteTodo, options.OperationMiddlewares["deleteTodo"]...)
 	router.PUT(options.BaseURL+"/todos/:id", wrapper.UpdateTodo, options.OperationMiddlewares["updateTodo"]...)
+	router.PUT(options.BaseURL+"/todos/:id/position", wrapper.MoveTodo, options.OperationMiddlewares["moveTodo"]...)
 
 }
 
@@ -246,26 +443,61 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"V9WQtVFFqbXNqkmLt4r/CgAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

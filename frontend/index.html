@@ -7,14 +7,120 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <main class="shell">
+    <dialog id="auth-dialog" class="auth-dialog" aria-labelledby="auth-heading">
+      <div class="auth-dialog-content">
+        <div class="auth-top">
+          <p class="eyebrow">WELCOME TO TODO DESK</p>
+          <button
+            id="auth-theme-toggle"
+            data-theme-toggle
+            type="button"
+            class="theme-toggle"
+            aria-label="ダークモードに切り替える"
+            title="ダークモードに切り替える"
+            aria-pressed="false"
+          >
+            <svg
+              class="theme-icon theme-icon--moon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20.3 15.6A8.5 8.5 0 0 1 8.4 3.7 8.5 8.5 0 1 0 20.3 15.6Z" />
+            </svg>
+            <svg
+              class="theme-icon theme-icon--sun"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="4" />
+              <path
+                d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"
+              />
+            </svg>
+          </button>
+        </div>
+        <h1 id="auth-heading">パスキーで始める</h1>
+        <p class="auth-intro">TODOを使うには、パスキーを登録するかログインしてください。</p>
+        <div class="auth-options">
+          <section class="auth-option" aria-labelledby="register-heading">
+            <p class="eyebrow">NEW HERE?</p>
+            <h2 id="register-heading">はじめて使う</h2>
+            <p>この端末のパスキーでユーザーを作成します。</p>
+            <button id="register-passkey" type="button" class="button primary">
+              パスキーを登録
+            </button>
+          </section>
+          <section class="auth-option" aria-labelledby="login-heading">
+            <p class="eyebrow">WELCOME BACK</p>
+            <h2 id="login-heading">登録済みの方</h2>
+            <p>登録済みのパスキーでログインします。</p>
+            <button id="login-passkey" type="button" class="button primary">ログイン</button>
+          </section>
+        </div>
+        <p id="auth-status" class="auth-status" role="status" aria-live="polite"></p>
+      </div>
+    </dialog>
+    <main id="todo-app" class="shell" hidden>
       <header class="hero">
-        <p class="eyebrow">KYoya67 TODO API</p>
-        <p class="lead">シンプルな画面からTODO APIを操作できます。</p>
-        <div class="connection">
-          <span class="api-url-label">API URL</span><output id="api-url"></output
-          ><button id="health-button" class="button secondary">接続確認</button
-          ><span id="health-status">未確認</span>
+        <div class="hero-top">
+          <div>
+            <h1 class="hero-title">Kyoya67 TODO</h1>
+            <p class="api-endpoint">
+              <span class="api-url-label">API URL</span><output id="api-url"></output>
+            </p>
+          </div>
+          <div class="hero-actions">
+            <button
+              id="theme-toggle"
+              data-theme-toggle
+              type="button"
+              class="theme-toggle"
+              aria-label="ダークモードに切り替える"
+              title="ダークモードに切り替える"
+              aria-pressed="false"
+            >
+              <svg
+                class="theme-icon theme-icon--moon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M20.3 15.6A8.5 8.5 0 0 1 8.4 3.7 8.5 8.5 0 1 0 20.3 15.6Z" />
+              </svg>
+              <svg
+                class="theme-icon theme-icon--sun"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="4" />
+                <path
+                  d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"
+                />
+              </svg>
+            </button>
+            <button id="logout-button" type="button" class="button logout-button">
+              ログアウト
+            </button>
+          </div>
         </div>
       </header>
       <section class="panel composer">
@@ -23,18 +129,15 @@
           <h2>新しいTODOを追加</h2>
         </div>
         <form id="todo-form">
-          <input id="title" required maxlength="200" placeholder="例：牛乳を買う" /><button
-            class="button primary"
-          >
-            追加する
-          </button>
+          <input id="title" required maxlength="200" placeholder="例：牛乳を買う" />
+          <button class="button primary">追加する</button>
         </form>
       </section>
       <section class="panel list-panel">
         <div class="list-header">
           <div>
             <p class="eyebrow">YOUR LIST</p>
-            <h2>TODO一覧</h2>
+            <h2>TODOボード</h2>
           </div>
         </div>
         <form id="search-form" class="search-form">
@@ -43,7 +146,7 @@
           <button class="button secondary">検索</button>
         </form>
         <p id="message" role="status"></p>
-        <div id="todo-list"></div>
+        <div id="todo-list" class="kanban-board"></div>
       </section>
     </main>
     <script src="./app.js"></script>
