@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -89,18 +90,10 @@ func TestRepositoryIntegration(t *testing.T) {
 	if err := repository.Delete(ctx, ownerB, created.ID); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("other user delete: %v", err)
 	}
-	var legacyID int64
-	if err := pool.QueryRow(ctx, "INSERT INTO todos (title) VALUES ($1) RETURNING id", title).Scan(&legacyID); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if _, err := pool.Exec(ctx, "DELETE FROM todos WHERE id = $1", legacyID); err != nil {
-			t.Errorf("cleanup legacy todo: %v", err)
-		}
-	}()
-	list, err = repository.List(ctx, ownerA, title, 10, 0)
-	if err != nil || len(list) != 1 || list[0].ID != created.ID {
-		t.Fatalf("legacy todo leaked: %+v err=%v", list, err)
+	_, err = pool.Exec(ctx, "INSERT INTO todos (title) VALUES ($1)", title)
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23502" {
+		t.Fatalf("ownerless todo must be rejected with NOT NULL violation: %v", err)
 	}
 
 	time.Sleep(2 * time.Millisecond)

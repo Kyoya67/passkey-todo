@@ -125,7 +125,7 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 |  | List | 100.0% |
 |  | Update | 83.3% |
 |  | Delete | 75.0% |
-`repository_test.go`では、sqlcのクエリメソッドを持つFakeを差し替え、Create、List、Update、Deleteへ渡す所有者IDを含む引数、戻り値の受け渡し、Repositoryでのエラー伝播をテストしている。`repository_integration_test.go`には、実DBでの所有者別一覧、他ユーザーによる更新・削除の拒否、所有者未設定の旧TODOの非表示を追加した。今回の計測ではDB未起動のため統合テストは実行していない。
+`repository_test.go`では、sqlcのクエリメソッドを持つFakeを差し替え、Create、List、Update、Deleteへ渡す所有者IDを含む引数、戻り値の受け渡し、Repositoryでのエラー伝播をテストしている。`repository_integration_test.go`には、実DBでの所有者別一覧、他ユーザーによる更新・削除の拒否、`user_id`を指定しないINSERTがNOT NULL制約で拒否されることを追加した。以下のカバレッジは過去の計測値であり、今回の制約追加では再計測していない。
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
@@ -138,7 +138,7 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 ## internal/todo（統合テスト）
 
-`repository_integration_test.go`では、`INTEGRATION_DATABASE_URL`で指定したPostgreSQLへ接続し、Fakeを使わずにCreate、List、Update、Deleteを実行している。作成したTODOの保存、一覧取得、更新後のタイトル、`updated_at`の更新、削除後の更新失敗を検証している。
+`repository_integration_test.go`では、`INTEGRATION_DATABASE_URL`で指定したPostgreSQLへ接続し、Fakeを使わずにCreate、List、Update、Deleteを実行している。所有者ごとの分離、`user_id`なしのINSERT拒否、作成したTODOの保存、一覧取得、更新後のタイトル、`updated_at`の更新、削除後の更新失敗を検証する。
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
