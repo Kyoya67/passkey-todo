@@ -50,11 +50,13 @@
           <h2>新しいTODOを追加</h2>
         </div>
         <form id="todo-form">
-          <input id="title" required maxlength="200" placeholder="例：牛乳を買う" /><button
-            class="button primary"
-          >
-            追加する
-          </button>
+          <input id="title" required maxlength="200" placeholder="例：牛乳を買う" />
+          <label for="new-status">状態</label>
+          <select id="new-status">
+            <option value="not_started">未着手</option>
+            <option value="in_progress">進行中</option>
+            <option value="completed">完了</option></select
+          ><button class="button primary">追加する</button>
         </form>
       </section>
       <section class="panel list-panel">

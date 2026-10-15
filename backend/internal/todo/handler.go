@@ -13,9 +13,9 @@ import (
 )
 
 type todoService interface {
-	Create(context.Context, [16]byte, string) error
+	Create(context.Context, [16]byte, string, string) (sqlc.Todo, error)
 	List(context.Context, [16]byte, string, int32, int32) ([]sqlc.Todo, error)
-	Update(context.Context, [16]byte, int64, string) error
+	Update(context.Context, [16]byte, int64, string, string) (sqlc.Todo, error)
 	Delete(context.Context, [16]byte, int64) error
 }
 
@@ -45,13 +45,17 @@ func (h *Handler) CreateTodo(c echo.Context) error {
 	if err := c.Bind(&request); err != nil {
 		return c.NoContent(http.StatusBadRequest)
 	}
-	if err := h.service.Create(c.Request().Context(), userID, request.Title); err != nil {
-		if errors.Is(err, ErrInvalidTitle) {
+	if request.Status != nil && *request.Status == "" {
+		return c.NoContent(http.StatusBadRequest)
+	}
+	todo, err := h.service.Create(c.Request().Context(), userID, request.Title, requestStatus(request.Status))
+	if err != nil {
+		if errors.Is(err, ErrInvalidTitle) || errors.Is(err, ErrInvalidStatus) {
 			return c.NoContent(http.StatusBadRequest)
 		}
 		return serviceUnavailable(c, "create")
 	}
-	return c.NoContent(http.StatusNoContent)
+	return c.JSON(http.StatusCreated, toTodo(todo))
 }
 
 func (h *Handler) ListTodos(c echo.Context, params openapi.ListTodosParams) error {
@@ -93,8 +97,11 @@ func (h *Handler) UpdateTodo(c echo.Context, id openapi.TodoID) error {
 	if err := c.Bind(&request); err != nil {
 		return c.NoContent(http.StatusBadRequest)
 	}
-	err := h.service.Update(c.Request().Context(), userID, id, request.Title)
-	if errors.Is(err, ErrInvalidTitle) {
+	if request.Status != nil && *request.Status == "" {
+		return c.NoContent(http.StatusBadRequest)
+	}
+	todo, err := h.service.Update(c.Request().Context(), userID, id, request.Title, requestStatus(request.Status))
+	if errors.Is(err, ErrInvalidTitle) || errors.Is(err, ErrInvalidStatus) {
 		return c.NoContent(http.StatusBadRequest)
 	}
 	if errors.Is(err, ErrNotFound) {
@@ -103,7 +110,7 @@ func (h *Handler) UpdateTodo(c echo.Context, id openapi.TodoID) error {
 	if err != nil {
 		return serviceUnavailable(c, "update")
 	}
-	return c.NoContent(http.StatusNoContent)
+	return c.JSON(http.StatusOK, toTodo(todo))
 }
 
 func (h *Handler) DeleteTodo(c echo.Context, id openapi.TodoID) error {
@@ -121,5 +128,12 @@ func (h *Handler) DeleteTodo(c echo.Context, id openapi.TodoID) error {
 }
 
 func toTodo(todo sqlc.Todo) openapi.Todo {
-	return openapi.Todo{Id: todo.ID, Title: todo.Title, CreatedAt: todo.CreatedAt.Time, UpdatedAt: todo.UpdatedAt.Time}
+	return openapi.Todo{Id: todo.ID, Title: todo.Title, Status: openapi.TodoStatus(todo.Status), CreatedAt: todo.CreatedAt.Time, UpdatedAt: todo.UpdatedAt.Time}
+}
+
+func requestStatus(status *openapi.TodoStatus) string {
+	if status == nil {
+		return ""
+	}
+	return string(*status)
 }

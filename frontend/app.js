@@ -194,7 +194,7 @@ async function load() {
       ? todos
           .map(
             (todo) =>
-              `<article class="todo" data-id="${todo.id}"><div><p class="todo-title">${escapeHTML(todo.title)}</p><p class="todo-meta">更新：${new Date(todo.updatedAt).toLocaleString('ja-JP')}</p></div><div class="todo-actions"><button class="button secondary edit">編集</button><button class="button secondary delete">削除</button></div></article>`
+              `<article class="todo" data-id="${todo.id}"><div><p class="todo-title">${escapeHTML(todo.title)}</p><p class="todo-meta">更新：${new Date(todo.updatedAt).toLocaleString('ja-JP')}</p></div><div class="todo-actions"><label>状態 <select class="todo-status" aria-label="${escapeHTML(todo.title)}の状態"><option value="not_started" ${todo.status === 'not_started' ? 'selected' : ''}>未着手</option><option value="in_progress" ${todo.status === 'in_progress' ? 'selected' : ''}>進行中</option><option value="completed" ${todo.status === 'completed' ? 'selected' : ''}>完了</option></select></label><button class="button secondary edit">編集</button><button class="button secondary delete">削除</button></div></article>`
           )
           .join('')
       : '<div class="empty">TODOはまだありません。</div>';
@@ -221,15 +221,39 @@ document.querySelector('#todo-form').addEventListener('submit', async (event) =>
   try {
     await request('/todos', {
       method: 'POST',
-      body: JSON.stringify({ title: input.value.trim() }),
+      body: JSON.stringify({
+        title: input.value.trim(),
+        status: document.querySelector('#new-status').value,
+      }),
     });
     input.value = '';
+    document.querySelector('#new-status').value = 'not_started';
     show('TODOを追加しました');
     await load();
   } catch (error) {
     if (error.status === 401)
       return showAuth('セッションが切れました。パスキーでログインしてください。');
     show(`追加に失敗しました（${error.message}）`, true);
+  }
+});
+list.addEventListener('change', async (event) => {
+  if (!event.target.matches('.todo-status')) return;
+  const item = event.target.closest('.todo');
+  const title =
+    item.querySelector('.todo-edit-input')?.value.trim() ||
+    item.querySelector('.todo-title').textContent.trim();
+  try {
+    await request(`/todos/${item.dataset.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ title, status: event.target.value }),
+    });
+    show('状態を更新しました');
+    await load();
+  } catch (error) {
+    if (error.status === 401)
+      return showAuth('セッションが切れました。パスキーでログインしてください。');
+    show(`状態の更新に失敗しました（${error.message}）`, true);
+    await load();
   }
 });
 list.addEventListener('click', async (event) => {

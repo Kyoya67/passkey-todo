@@ -28,9 +28,9 @@ func NewRepository(queries todoQueries) *Repository {
 func (r *Repository) Create(
 	ctx context.Context,
 	userID [16]byte,
-	title string,
+	title, status string,
 ) (sqlc.Todo, error) {
-	return r.queries.CreateTodo(ctx, sqlc.CreateTodoParams{Title: title, OwnerID: pgtype.UUID{Bytes: userID, Valid: true}})
+	return r.queries.CreateTodo(ctx, sqlc.CreateTodoParams{Title: title, OwnerID: pgtype.UUID{Bytes: userID, Valid: true}, Status: status})
 }
 
 func (r *Repository) List(ctx context.Context, userID [16]byte, title string, limit, offset int32) ([]sqlc.Todo, error) {
@@ -42,8 +42,8 @@ func (r *Repository) List(ctx context.Context, userID [16]byte, title string, li
 	})
 }
 
-func (r *Repository) Update(ctx context.Context, userID [16]byte, id int64, title string) (sqlc.Todo, error) {
-	return r.queries.UpdateTodo(ctx, sqlc.UpdateTodoParams{TodoID: id, OwnerID: pgtype.UUID{Bytes: userID, Valid: true}, Title: title})
+func (r *Repository) Update(ctx context.Context, userID [16]byte, id int64, title, status string) (sqlc.Todo, error) {
+	return r.queries.UpdateTodo(ctx, sqlc.UpdateTodoParams{TodoID: id, OwnerID: pgtype.UUID{Bytes: userID, Valid: true}, Title: title, Status: status})
 }
 
 func (r *Repository) Delete(ctx context.Context, userID [16]byte, id int64) error {

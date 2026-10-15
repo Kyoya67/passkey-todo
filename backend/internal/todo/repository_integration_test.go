@@ -53,7 +53,7 @@ func TestRepositoryIntegration(t *testing.T) {
 	}
 	title := "integration-test-" + time.Now().UTC().Format("20060102150405.000000000")
 
-	created, err := repository.Create(ctx, ownerA, title)
+	created, err := repository.Create(ctx, ownerA, title, StatusNotStarted)
 	if err != nil {
 		t.Fatalf("create todo: %v", err)
 	}
@@ -69,6 +69,9 @@ func TestRepositoryIntegration(t *testing.T) {
 	if created.ID == 0 || created.Title != title || !created.CreatedAt.Valid || !created.UpdatedAt.Valid {
 		t.Fatalf("unexpected created todo: %+v", created)
 	}
+	if created.Status != StatusNotStarted {
+		t.Fatalf("created status=%q", created.Status)
+	}
 	if !created.CreatedAt.Time.Equal(created.UpdatedAt.Time) {
 		t.Fatalf("created and updated timestamps differ: created=%v updated=%v", created.CreatedAt.Time, created.UpdatedAt.Time)
 	}
@@ -80,11 +83,19 @@ func TestRepositoryIntegration(t *testing.T) {
 	if len(list) != 1 || list[0].ID != created.ID {
 		t.Fatalf("unexpected list result: %+v", list)
 	}
+	if list[0].Status != StatusNotStarted {
+		t.Fatalf("listed status=%q", list[0].Status)
+	}
+	_, err = pool.Exec(ctx, "INSERT INTO todos (title, user_id, status) VALUES ($1, $2, $3)", title, pgtype.UUID{Bytes: ownerA, Valid: true}, "invalid")
+	var statusErr *pgconn.PgError
+	if !errors.As(err, &statusErr) || statusErr.Code != "23514" {
+		t.Fatalf("invalid status must be rejected by DB CHECK: %v", err)
+	}
 	otherList, err := repository.List(ctx, ownerB, title, 10, 0)
 	if err != nil || len(otherList) != 0 {
 		t.Fatalf("other user list=%+v err=%v", otherList, err)
 	}
-	if _, err := repository.Update(ctx, ownerB, created.ID, "forbidden"); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := repository.Update(ctx, ownerB, created.ID, "forbidden", ""); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("other user update: %v", err)
 	}
 	if err := repository.Delete(ctx, ownerB, created.ID); !errors.Is(err, pgx.ErrNoRows) {
@@ -98,19 +109,26 @@ func TestRepositoryIntegration(t *testing.T) {
 
 	time.Sleep(2 * time.Millisecond)
 	updatedTitle := title + "-updated"
-	updated, err := repository.Update(ctx, ownerA, created.ID, updatedTitle)
+	updated, err := repository.Update(ctx, ownerA, created.ID, updatedTitle, StatusCompleted)
 	if err != nil {
 		t.Fatalf("update todo: %v", err)
 	}
 	if updated.Title != updatedTitle || !updated.UpdatedAt.Valid || !updated.UpdatedAt.Time.After(created.UpdatedAt.Time) {
 		t.Fatalf("unexpected updated todo: created=%+v updated=%+v", created, updated)
 	}
+	if updated.Status != StatusCompleted {
+		t.Fatalf("updated status=%q", updated.Status)
+	}
+	retained, err := repository.Update(ctx, ownerA, created.ID, updatedTitle, "")
+	if err != nil || retained.Status != StatusCompleted {
+		t.Fatalf("retained status=%q err=%v", retained.Status, err)
+	}
 
 	if err := repository.Delete(ctx, ownerA, created.ID); err != nil {
 		t.Fatalf("delete todo: %v", err)
 	}
 	deleted = true
-	if _, err := repository.Update(ctx, ownerA, created.ID, "deleted"); err == nil {
+	if _, err := repository.Update(ctx, ownerA, created.ID, "deleted", ""); err == nil {
 		t.Fatal("expected update after delete to fail")
 	}
 }

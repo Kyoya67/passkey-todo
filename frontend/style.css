@@ -131,6 +131,15 @@ input {
   font: inherit;
   outline: none;
 }
+select {
+  min-width: 0;
+  border: 1px solid #dbe5de;
+  border-radius: 11px;
+  padding: 12px 14px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
 input:focus {
   border-color: #16816d;
   box-shadow: 0 0 0 4px #16816d22;
@@ -225,6 +234,8 @@ form input {
 }
 .todo-actions {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 .empty {

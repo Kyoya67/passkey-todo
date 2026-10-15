@@ -13,20 +13,21 @@ import (
 
 const createTodo = `-- name: CreateTodo :one
 INSERT INTO todos (
-    title, user_id
+    title, user_id, status
 ) VALUES (
-    $1, $2::uuid
+    $1, $2::uuid, $3
 )
-RETURNING id, title, created_at, updated_at, user_id
+RETURNING id, title, created_at, updated_at, user_id, status
 `
 
 type CreateTodoParams struct {
 	Title   string      `json:"title"`
 	OwnerID pgtype.UUID `json:"owner_id"`
+	Status  string      `json:"status"`
 }
 
 func (q *Queries) CreateTodo(ctx context.Context, arg CreateTodoParams) (Todo, error) {
-	row := q.db.QueryRow(ctx, createTodo, arg.Title, arg.OwnerID)
+	row := q.db.QueryRow(ctx, createTodo, arg.Title, arg.OwnerID, arg.Status)
 	var i Todo
 	err := row.Scan(
 		&i.ID,
@@ -34,6 +35,7 @@ func (q *Queries) CreateTodo(ctx context.Context, arg CreateTodoParams) (Todo, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UserID,
+		&i.Status,
 	)
 	return i, err
 }
@@ -62,7 +64,8 @@ SELECT
     title,
     created_at,
     updated_at,
-    user_id
+    user_id,
+    status
 FROM todos
 WHERE user_id = $1::uuid
   AND title ILIKE '%' || $2::text || '%'
@@ -98,6 +101,7 @@ func (q *Queries) ListTodos(ctx context.Context, arg ListTodosParams) ([]Todo, e
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.UserID,
+			&i.Status,
 		); err != nil {
 			return nil, err
 		}
@@ -113,19 +117,26 @@ const updateTodo = `-- name: UpdateTodo :one
 UPDATE todos
 SET
     title = $1,
+    status = COALESCE(NULLIF($2::text, ''), status),
     updated_at = NOW()
-WHERE id = $2 AND user_id = $3::uuid
-RETURNING id, title, created_at, updated_at, user_id
+WHERE id = $3 AND user_id = $4::uuid
+RETURNING id, title, created_at, updated_at, user_id, status
 `
 
 type UpdateTodoParams struct {
 	Title   string      `json:"title"`
+	Status  string      `json:"status"`
 	TodoID  int64       `json:"todo_id"`
 	OwnerID pgtype.UUID `json:"owner_id"`
 }
 
 func (q *Queries) UpdateTodo(ctx context.Context, arg UpdateTodoParams) (Todo, error) {
-	row := q.db.QueryRow(ctx, updateTodo, arg.Title, arg.TodoID, arg.OwnerID)
+	row := q.db.QueryRow(ctx, updateTodo,
+		arg.Title,
+		arg.Status,
+		arg.TodoID,
+		arg.OwnerID,
+	)
 	var i Todo
 	err := row.Scan(
 		&i.ID,
@@ -133,6 +144,7 @@ func (q *Queries) UpdateTodo(ctx context.Context, arg UpdateTodoParams) (Todo, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UserID,
+		&i.Status,
 	)
 	return i, err
 }
