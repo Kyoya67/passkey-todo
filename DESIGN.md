@@ -164,7 +164,7 @@ GitHub Actions用のOIDCプロバイダー、IAMロール、信頼ポリシー�
 | — | Cognito + パスキー | Cognitoはパスキーログインに対応するが、今回検討した自己登録フローでは、パスキーを登録する前にメールの確認コードによる初回確認が必要だった。登録からパスキーだけで完結させる要件に合わない |
 | — | Google認証 | 初回から使えるが、レビュアーに既存のGoogleアカウントの利用を求めるため採用しない |
 
-決め手はログイン方法だけでなく、**新規登録の最初の一歩からパスキーだけで完結できるか**だった。メールOTPやGoogleアカウントを求めると、レビュアーが所属組織の利用方針によって使いづらい場合がある。Cognitoの[パスキー登録手順](https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-authentication-flow-methods.html)でも、既存ユーザーがパスキーを追加するには先に別の認証手段でサインインするフローが示されている。AWSを使わず各開発者がローカルで同じ認証フローを試せる点は副次的な利点である。
+決め手はログイン方法だけでなく、**新規登録の最初の一歩からパスキーだけで完結できるか**だった。レビュアーが所属組織の利用方針によってメールOTPやGoogleアカウントが使えない場合がある。そのためパスキーによる認証基盤を自作した。Cognitoの[パスキー登録手順](https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-authentication-flow-methods.html)でも、ユーザーがパスキーでログインするには先にメール等の認証手段でサインインするフローが示されている。
 
 ---
 
