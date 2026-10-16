@@ -34,6 +34,8 @@ paths:
                 $ref: '#/components/schemas/RegistrationOptions'
         '403':
           description: Originが未指定または許可されていない
+        '429':
+          description: IP単位の認証リクエスト制限を超過（Retry-Afterヘッダー）
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
@@ -58,6 +60,8 @@ paths:
           description: Originが未指定または許可されていない
         '415':
           description: Content-Typeがapplication/jsonではない
+        '429':
+          description: IP単位の認証リクエスト制限を超過（Retry-Afterヘッダー）
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
@@ -76,6 +80,8 @@ paths:
                 $ref: '#/components/schemas/LoginOptions'
         '403':
           description: Originが未指定または許可されていない
+        '429':
+          description: IP単位の認証リクエスト制限を超過（Retry-Afterヘッダー）
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
@@ -104,6 +110,8 @@ paths:
           description: Originが未指定または許可されていない
         '415':
           description: Content-Typeがapplication/jsonではない
+        '429':
+          description: IP単位の認証リクエスト制限を超過（Retry-Afterヘッダー）
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
@@ -161,6 +169,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Originが許可されていない
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
@@ -216,6 +226,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Originが許可されていない
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
@@ -238,6 +250,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Originが許可されていない
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
@@ -267,6 +281,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '403':
+          description: Originが許可されていない
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 

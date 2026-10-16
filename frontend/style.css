@@ -11,11 +11,19 @@
 body {
   margin: 0;
   min-height: 100dvh;
+  -webkit-user-select: none;
+  user-select: none;
   background:
     radial-gradient(circle at 8% 8%, #bee8d6 0, transparent 34rem),
     radial-gradient(circle at 92% 18%, #d4e7f4 0, transparent 37rem),
     radial-gradient(circle at 70% 95%, #f5e4d2 0, transparent 36rem),
     linear-gradient(145deg, #f7fbf8, #eaf3ef 55%, #f6f1eb);
+}
+input,
+textarea,
+[contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
 }
 [hidden] {
   display: none !important;

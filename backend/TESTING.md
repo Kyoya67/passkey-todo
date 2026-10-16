@@ -1,6 +1,10 @@
 # バックエンドテスト方針
 
-Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsqlc呼び出しを責務ごとにテストする。sqlcが生成したコード自体の単体テストは作成せず、生成コードを利用するRepositoryの引数、戻り値、エラー伝播をFakeで検証する。
+REST APIのHTTP処理、業務ルール、Repositoryのsqlc呼び出しを責務ごとにテストする。sqlcが生成したコード自体の単体テストは作成せず、生成コードを利用するRepositoryの引数、戻り値、エラー伝播をFakeで検証する。
+
+## cmd/api
+
+`main.go`では、CORS、TODOのOrigin検証、セッション検証、認証APIのレート制限を含む依存関係の組み立てを行う。`main`を直接起動する単体テストはなく、今回の計測では0.0%。判定処理は`internal/middleware`でテストする。
 
 ## internal/auth
 
@@ -33,11 +37,11 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 |  | WebAuthnDisplayName | 100.0% |
 |  | WebAuthnCredentials | 0.0% |
 | repository.go | NewRepository | 100.0% |
-|  | CreateAccount | 37.5% |
-| challenge.go | NewChallengeStore | 0.0% |
-|  | registrationKey | 0.0% |
-|  | Save | 0.0% |
-|  | Consume | 0.0% |
+|  | CreateAccount | 81.2% |
+| challenge.go | NewChallengeStore | 100.0% |
+|  | registrationKey | 100.0% |
+|  | Save | 91.7% |
+|  | Consume | 100.0% |
 | handler.go | BeginLogin | 88.9% |
 |  | FinishLogin | 82.9% |
 |  | Logout | 100.0% |
@@ -64,9 +68,9 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 |  | Revoke | 100.0% |
 | repository.go | FindCredential | 90.9% |
 |  | UpdateCredential | 77.8% |
-| **パッケージ合計（外部DB・Redisテスト除く）** |  | **81.2%** |
+| **パッケージ合計（統合テスト込み）** |  | **90.1%** |
 
-今回の計測は`go test ./internal/auth ./internal/router -coverprofile=/private/tmp/kyoya-logout-coverage.out -count=1`と`go tool cover -func=/private/tmp/kyoya-logout-coverage.out`で行った。専用テストDBとRedisの接続先は指定せず、外部I/Oを伴う統合テストはスキップした。前回の88.3%はRedisテスト込みの値であり比較条件が異なる。`WebAuthnCredentials`は新規ユーザーの空Credential一覧を返すインターフェース実装で、登録経路では呼ばれない。
+今回の計測ではローカルのPostgreSQLとRedisを使用した。`WebAuthnCredentials`は新規ユーザーの空Credential一覧を返すインターフェース実装で、登録経路では呼ばれない。
 
 ## internal/middleware
 
@@ -74,17 +78,25 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 
 `auth_test.go`では、TODO一覧・作成・更新・削除の未ログイン拒否、正しいセッションの通過、期限切れ・不正セッションの拒否、Redis障害時の503、公開ルートとCORSプリフライトの通過を確認する。ユーザーIDをリクエストコンテキストへ渡すことも確認する。TODOの所有者条件はTODOパッケージで検証する。
 
+`csrf_test.go`では、TODOの状態変更で許可Originを通し、別Origin・Originなし・`null`・似たドメインを403にすることを確認する。GET・OPTIONS、認証・ヘルスルートはこのミドルウェアの対象外であることも確認する。
+
+`auth_rate_limit_test.go`では、認証APIのルート別上限、超過時の429と`Retry-After`、Redis障害時の503、ALBの`X-Forwarded-For`から最終IPを採用すること、対象外ルートの通過を確認する。ローカルRedisを使う統合テストではLuaスクリプトによる10回までの通過・11回目の拒否とTTL設定を確認する。
+
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
 | auth.go | UserID | 100.0% |
 |  | WithUserID | 100.0% |
 |  | RequireTodoSession | 100.0% |
 | cors.go | CORS | 100.0% |
-| **パッケージ合計** |  | **100.0%** |
+| csrf.go | RequireTodoOrigin | 100.0% |
+| auth_rate_limit.go | AuthRateLimit | 100.0% |
+|  | authRateLimit | 83.3% |
+|  | albClientIP | 100.0% |
+| **パッケージ合計** |  | **93.8%** |
 
 ## internal/config
 
-`config.go`では、次の観点をテストしている。認証設定の未指定・両方指定・片方だけ指定、Redis接続先の必須条件、DB等の必須設定、環境変数の既定値、Origin一覧の分割を確認する。RP ID・Origin・Redis接続先のいずれかがない場合は起動設定エラーとする。
+`config.go`では、次の観点をテストしている。認証設定の未指定・両方指定・片方だけ指定、Redis接続先とCSRF許可Originの必須条件、DB等の必須設定、環境変数の既定値、CORS・CSRFのOrigin一覧の分割を確認する。RP ID・Origin・Redis接続先・CSRF許可Originのいずれかがない場合は起動設定エラーとする。
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
@@ -113,65 +125,62 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 |  | GetHealth | 100.0% |
 |  | CreateTodo | 100.0% |
 |  | ListTodos | 95.0% |
-|  | UpdateTodo | 92.9% |
+|  | UpdateTodo | 87.5% |
+|  | MoveTodo | 84.6% |
 |  | DeleteTodo | 100.0% |
 |  | toTodo | 100.0% |
+|  | requestPriorityLevel | 100.0% |
+|  | requestStatus | 100.0% |
 `service_test.go`では、Fake Repositoryを差し替え、認証済みユーザーIDの引き渡し、タイトルの入力検証、ページネーションのデフォルト値・上限値・不正値、Repositoryエラーの伝播、`pgx.ErrNoRows`から`ErrNotFound`への変換をテストしている。
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
 | service.go | NewService | 100.0% |
+|  | normalizeStatus | 100.0% |
+|  | normalizePriorityLevel | 80.0% |
 |  | Create | 100.0% |
 |  | List | 100.0% |
-|  | Update | 83.3% |
+|  | Update | 100.0% |
 |  | Delete | 75.0% |
-`repository_test.go`では、sqlcのクエリメソッドを持つFakeを差し替え、Create、List、Update、Deleteへ渡す所有者IDを含む引数、戻り値の受け渡し、Repositoryでのエラー伝播をテストしている。`repository_integration_test.go`には、実DBでの所有者別一覧、他ユーザーによる更新・削除の拒否、`user_id`を指定しないINSERTがNOT NULL制約で拒否されることを追加した。以下のカバレッジは過去の計測値であり、今回の制約追加では再計測していない。
+|  | Move | 83.3% |
+`repository_test.go`では、sqlcのクエリメソッドを持つFakeを差し替え、Create、List、Update、Deleteへ渡す所有者IDを含む引数、戻り値の受け渡し、Repositoryでのエラー伝播をテストしている。`repository_integration_test.go`では、実DBでの所有者別一覧、他ユーザーによる更新・削除の拒否、`user_id`を指定しないINSERTの拒否などを検証する。以下は実DBを使った統合テスト込みの計測値。
 
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
 | repository.go | NewRepository | 100.0% |
+|  | Move | 81.2% |
 |  | Create | 100.0% |
 |  | List | 100.0% |
 |  | Update | 100.0% |
 |  | Delete | 100.0% |
-| **パッケージ合計（単体テスト）** |  | **95.2%** |
+| **パッケージ合計（統合テスト込み）** |  | **90.7%** |
 
 ## internal/todo（統合テスト）
 
 `repository_integration_test.go`では、`INTEGRATION_DATABASE_URL`で指定したPostgreSQLへ接続し、Fakeを使わずにCreate、List、Update、Move、Deleteを実行している。所有者ごとの分離、`user_id`なしのINSERT拒否、作成したTODOの保存、一覧取得、ステータスの保存・更新・省略時の維持、不正なステータスのDB制約、優先順位の初期値・同じ状態と優先度のグループ内移動・異なる優先度、所有者、ステータスへの移動拒否、優先度変更後の順位、完了TODOの更新日時順と並べ替え拒否、更新後のタイトルと`updated_at`、削除後の更新失敗を検証する。
 
-| ファイル | 関数 | カバレッジ |
-|---|---|---:|
-| repository.go | NewRepository | 100.0% |
-|  | Create | 100.0% |
-|  | List | 100.0% |
-|  | Update | 100.0% |
-|  | Delete | 100.0% |
-| **Repository関数合計** |  | **100.0%** |
+今回、ローカルPostgreSQLを使う`TestRepositoryIntegration`が成功した。統合テスト単独での`repository.go`のカバレッジは、`Move`が81.2%、`Create`・`List`・`Update`・`Delete`がそれぞれ100.0%。TODOパッケージ全体では24.6%。
 
 ## カバレッジ計測結果
 
-以下の表はIssue #5時点の旧パッケージ構成で計測した履歴。現行の単体テスト計測（`go test ./... -cover`）では、TODO 92.9%、auth 68.6%、config 100.0%、router 100.0%、database 22.2%だった。外部DB・Redisを使う統合テストは環境変数未指定時にスキップされるため、これは統合テスト込みの値ではない。
+ローカルPostgreSQLとRedisの接続先を指定して`go test ./... -coverprofile=coverage.out -count=1`を実行し、`go tool cover -func=coverage.out`で確認した結果。DB・Redis統合テストも実行済み。全パッケージの数値には、直接テストしていない起動処理と生成コードも含む。
 
-単体テストの計測コマンド：`go test ./... -coverprofile=coverage.out`、`go tool cover -func=coverage.out`
-
-| 対象 | カバレッジ |
+| 対象パッケージ | カバレッジ |
 |---|---:|
-| internal/handler | 93.2% |
-| internal/service | 90.0% |
-| internal/repository | 100.0% |
-| 全パッケージ | 29.3% |
+| cmd/api | 0.0% |
+| internal/auth | 90.1% |
+| internal/config | 100.0% |
+| internal/database | 22.2% |
+| internal/database/sqlc | 0.0% |
+| internal/middleware | 93.8% |
+| internal/openapi | 0.0% |
+| internal/router | 100.0% |
+| internal/todo | 90.7% |
+| **全パッケージ合計** | **65.9%** |
 
-統合テスト単独の計測コマンド：`INTEGRATION_DATABASE_URL='postgres://todo:secret@localhost:5432/todo?sslmode=disable' go test ./internal/todo -run Integration -coverprofile=integration-only-coverage.out -count=1`、`go tool cover -func=integration-only-coverage.out`
+統合テストだけを`go test ./internal/auth ./internal/middleware ./internal/todo -run Integration -coverprofile=integration-only-coverage.out -count=1 -v`で再実行し、authの4件、middlewareの1件、TODOの1件がすべて成功した。統合テスト単独のパッケージカバレッジはauth 45.4%、middleware 35.4%、TODO 24.6%。これは統合テストだけの値であり、上表の全テスト込みの値とは異なる。
 
-| 統合テスト対象 | カバレッジ |
-|---|---:|
-| Repository関数（Issue #5時点） | 100.0% |
-| 統合テスト全体（Issue #5時点） | 100.0% |
-
-認証チャレンジをRedisへ移した時点の旧パッケージ構成での計測値は、auth 93.2%、config 100.0%、router 100.0%、既存TODOのHandler 93.2%、Service 90.0%、Repository 100.0%、全パッケージ50.0%。Go文単位の割合と、実DBやブラウザまで含む検証範囲は別の指標として扱う。
-
-全パッケージの値には、手動起動をエントリーポイントとする`cmd/api`、外部I/Oを扱うDB接続、sqlc・oapi-codegenの生成コード、Router、CORSミドルウェアが含まれる。生成コードは直接編集していない。Repositoryの統合テストは、PostgreSQL接続URLを指定した場合に実行する。
+全パッケージの値には、手動起動をエントリーポイントとする`cmd/api`、DB接続、sqlc・oapi-codegenの生成コード、Router、CORSミドルウェアが含まれる。生成コードは直接編集していない。Goのパッケージ単位の計測では、テスト対象パッケージ外にある生成sqlcコードは0.0%と表示されるため、Repository統合テストの実行有無とは区別する。
 
 ## 検証コマンド
 
@@ -182,6 +191,6 @@ Issue #5では、必須REST APIのHTTP処理、業務ルール、Repositoryのsq
 - `go tool cover -func=coverage.out`
 - `go vet ./...`
 
-PostgreSQLの統合テストは、DBコンテナとマイグレーションを準備した上で実行する。
+PostgreSQL・Redisの統合テストは、DBコンテナ、マイグレーション、Redisを準備し、両方の接続先を指定して実行する。
 
-- `INTEGRATION_DATABASE_URL='postgres://todo:secret@localhost:5432/todo?sslmode=disable' go test ./internal/todo -run Integration -count=1`
+- `INTEGRATION_DATABASE_URL='postgres://todo:secret@localhost:5432/todo?sslmode=disable' REDIS_TEST_ADDR='127.0.0.1:6379' go test ./... -coverprofile=coverage.out -count=1`

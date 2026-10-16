@@ -124,6 +124,7 @@ module "ecs" {
   database_host        = module.rds.address
   redis_host           = module.elasticache.primary_endpoint_address
   cors_allowed_origins = "https://ca-techlounge-todo.kyo8.dev,http://localhost:8081"
+  csrf_allowed_origins = "https://ca-techlounge-todo.kyo8.dev"
   region               = local.region
   tags                 = local.common_tags
 }
@@ -146,6 +147,13 @@ module "alb" {
   target_port       = var.backend_port
   certificate_arn   = module.acm.certificate_arn
   tags              = local.common_tags
+}
+
+module "waf" {
+  source  = "./modules/waf"
+  name    = local.project
+  alb_arn = module.alb.arn
+  tags    = local.common_tags
 }
 
 module "route53" {
