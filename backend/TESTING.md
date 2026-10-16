@@ -189,3 +189,7 @@ REST APIのHTTP処理、業務ルール、Repositoryのsqlc呼び出しを責務
 PostgreSQL・Redisの統合テストは、DBコンテナ、マイグレーション、Redisを準備し、両方の接続先を指定して実行する。
 
 - `INTEGRATION_DATABASE_URL='postgres://todo:secret@localhost:5432/todo?sslmode=disable' REDIS_TEST_ADDR='127.0.0.1:6379' go test ./... -coverprofile=coverage.out -count=1`
+
+## internal/middleware（認証APIレート制限）
+
+`auth_rate_limit.go`では、次の観点をテストしている。登録開始10回／分とログイン・完了20回／分、超過時429とRetry-After、Redis障害時503、X-Forwarded-Forの最終IP採用、不正IPの拒否、対象外ルートを検証する。Redis Luaスクリプトの実Redis統合試験は未実施。カバレッジは未計測（GitHub Actionsの課金制限・ローカル依存環境未構築のため）。

@@ -65,6 +65,7 @@ func main() {
 	e.Use(middleware.CORS(cfg.CORSAllowedOrigins))
 	e.Use(middleware.RequireTodoOrigin(cfg.CSRFAllowedOrigins))
 	e.Use(middleware.RequireTodoSession(sessionStore))
+	e.Use(middleware.AuthRateLimit(redisClient))
 	router.Register(e, todoHandler, authHandler)
 	e.Logger.Fatal(e.Start(":" + cfg.AppPort))
 }
