@@ -3,39 +3,19 @@
 ## 1. 開発方針
 
 ### 1.1 PhaseとIssueの構成
-phase1ではローカル環境での開発、phase2ではAWS環境へのデプロイ、phase3では追加機能の実装を行う。それぞれのphaseに対応するIssueを順次消化していく。
 
-#### Phase 1：Local Development
+開発をPhaseに分け、各Phaseの作業を複数のIssueで管理する。
 
-- Issue #1：開発方針の文書化とGo・Echo・PostgreSQLのローカル環境構築
-- Issue #2：必須REST API 4本の実装
-- Issue #3：OpenAPI仕様の定義
-- Issue #4：Docker / Docker Composeによる起動環境構築
-- Issue #5：必須機能のテストコード実装
-- Issue #6：READMEと動作確認手順の整備
-
-#### Phase 2：AWS Infrastructure
-
-- Issue #7：TerraformによるAWSインフラ構築
-- Issue #8：GitHub ActionsとOIDCによるCI/CD構築
-- Issue #9：ECS Serviceの起動・停止運用
-- Issue #10：AWS上での動作確認と証跡取得
-
-#### Phase 3：Additional Features
-
-- Issue #11：パスキー認証とユーザー別TODO管理
-- Issue #12：TODOステータス管理
-- Issue #13：TODO優先順位管理
-- Issue #14：大量データを想定した負荷試験と性能改善
-- Issue #15：追加機能に伴うOpenAPIとテストの更新
-- Issue #16：gRPCエンドポイントの追加
+- Phase 1（ローカル開発）：Issue #1〜#6
+- Phase 2（AWS環境）：Issue #7〜#10
+- Phase 3（追加機能）：Issue #11〜#16
 
 ### 1.2 ブランチ運用
 
 GitHub ProjectsのPhaseは関連するIssueを開発段階ごとにまとめ、Issueは個別の作業単位として管理する。
 開発には`main`、`develop`、Issueごとの作業ブランチを使用する。
 
-1. 各Issueに着手する際、`develop`から作業ブランチ（`feature/issue-1`など）を作成する。
+1. 各Issueに着手する際、`develop`から作業ブランチ（`feature/XXX`など）を作成する。
 2. 実装・テスト完了後、`develop`に対するPull Requestを作成する。
 3. コードレビューとCIの成功を確認したうえで`develop`にマージする。
 4. Phase内のすべてのIssueが`develop`にマージされ、統合テストが成功した段階で、`develop`から`main`へのPull Requestを作成する。
@@ -79,65 +59,9 @@ kyoya67-todo/
 
 ## 2. AIの活用方針
 
-本プロジェクトでは、ChatGPTとOpenAI Codexを開発プロセスに取り入れる。
-ChatGPTを技術選定・設計相談・タスク管理に利用し、Codexを実装支援に利用する。
+ChatGPTを要件整理・技術選定・設計相談とIssueの作成に、OpenAI Codexを実装・テスト・調査の支援に利用する。IssueはGitHub Projectsで管理し、変更はPull Requestでレビューする。AIの提案を採用するかは開発者が判断し、変更内容と動作を検証する。
 
-### 2.1 使用するツール
-
-- ChatGPT：技術調査、設計相談、タスク分解、GitHub Issuesの作成
-- OpenAI Codex：コード実装、テスト作成、エラー原因の調査、コード修正
-- GitHub Projects：開発工程とIssueの進捗管理
-- GitHub Pull Requests：変更差分の確認とレビュー
-
-### 2.2 ChatGPTを利用した技術選定
-
-開発開始前にChatGPTとの対話を通じて、バックエンドの技術選定とAWSへのデプロイ方式を検討した。
-
-- Go標準ライブラリとGin・Echoの比較
-- EchoとGinのルーティング・エラーハンドリングの違い
-- HTTP QUERYメソッドとGET・POSTの使い分け
-- AWS LambdaとECS Fargateの比較
-- ローカルとAWS環境におけるDockerイメージの再利用
-- ECS Serviceを必要時のみ起動するコスト管理方式
-- Terraformによるインフラ構築
-- GitHub ActionsとOIDCによるAWSへのデプロイ
-
-### 2.3 ChatGPTによるタスク管理
-
-技術選定後、ChatGPTとGitHubリポジトリを連携し、開発計画をGitHub Issuesに落とし込んだ。
-
-1. 課題の必須要件と追加要件を整理する。
-2. 開発工程を3つのPhaseに分割する。
-3. 各Phaseに必要な作業をIssue単位に分解する。
-5. ChatGPTのGitHub連携を利用して16件のIssueを作成する。
-5. GitHub ProjectsでPhaseごとにタスクを管理する方針を定める。
-
-### 2.4 Codexによる実装支援
-
-実装工程では、CodexにGitHub Issueを参照させ、Issueに記載した要件と完了条件に従って作業を進めてもらう方針とする。
-
-1. GitHub Issueで実装範囲と完了条件を定義する。
-2. `develop`からIssue用の作業ブランチを作成する。
-3. Codexに対象Issueの実装を依頼する。
-5. Codexがコードとテストを作成する。
-5. 開発者が変更差分と生成コードをレビューする。
-6. テスト・動作確認を実施し、必要に応じて修正する。
-7. Pull Requestを`develop`へマージする。
-8. 対象Issueを完了として更新する。
-
-### 2.5 開発者自身が判断・検証すること
-
-- 課題の要件解釈
-- 技術選定とアーキテクチャの決定
-- APIとデータモデルの設計
-- AI生成コードの理解とレビュー
-- テストの妥当性の確認
-- 実際の動作確認
-- セキュリティ・保守性・パフォーマンスの検証
-- AIの提案を採用・修正・却下する判断
-- Design Docの内容
-
-AIの具体的な利用履歴、代表的なプロンプト、採用・修正・不採用の判断、検証結果は、プロジェクト直下の`ai-usage/`でPRごとにファイルを分けて管理する。
+具体的な利用内容、判断と検証結果は[AI利用履歴](ai-usage/)にPRごとに記録する。Codexの作業ルールと記録方法は[AGENTS.md](AGENTS.md)に定める。
 
 ## 3. 技術選定とトレードオフ
 
@@ -354,7 +278,7 @@ Webサーバー用ECSタスクとマイグレーションタスクは、NAT Gate
 
 ### 5.1 全体方針
 
-CIはPull Requestの作成・更新時に実行し、Goのテスト・静的解析、sqlcのSQL検証と生成コードの差分確認、Terraformのフォーマット・検証、バックエンドコンテナイメージのビルドを行う。CIではAWSへの認証やデプロイを行わず、CDと責務を分離する。
+CIはPull Requestの作成・更新時に実行し、フロントエンドのフォーマット・テスト、Goのテスト・静的解析、sqlcのSQL検証と生成コードの差分確認、Terraformのフォーマット・検証、バックエンドコンテナイメージのビルドを行う。CIではAWSへの認証やデプロイを行わず、CDと責務を分離する。
 各Issueの作業が完了したら`develop`へPull Requestを作成する。
 Phaseに属するすべてのIssueが`develop`へマージされ、統合テストが成功した段階で、`main`へのPull Requestを作成する。
 AWS環境は1つのみとし、`main`へのマージをAWSデプロイの基準とする。
@@ -363,7 +287,7 @@ AWS環境は1つのみとし、`main`へのマージをAWSデプロイの基準�
 
 CIはPull Requestで実行する。最初に変更パスを判定し、関係する検証ジョブだけを実行する。ワークフロー設定自体を変更した場合は、各検証ジョブを実行する。
 
-- フロントエンド：Node.jsの依存関係をインストールし、Prettierのフォーマットチェック
+- フロントエンド：Node.jsの依存関係をインストールし、Prettierのフォーマットチェックと`npm test`による操作テスト
 - バックエンド：`go test ./...`、`go vet ./...`
 - sqlc：`sqlc vet`、`sqlc generate`を実行し、生成コードに未コミットの差分がないことを確認
 - Terraform：`terraform fmt -check -recursive`、`terraform init -backend=false`、`terraform validate`
@@ -378,9 +302,3 @@ CIではAWSへのデプロイは行わず、コードとTerraform構成の静的
 - `backend/`、`api/`、`infra/`またはCD設定に変更がある場合：バックエンドイメージをコミットハッシュでECRへpushし、ECSタスク定義とServiceを更新する。
 - `backend/db/migration/`に変更がある場合：上記のバックエンドジョブ内でマイグレーション用イメージをECRへpushし、ECSワンショットタスクで適用する。成功後にバックエンドをデプロイする。
 - `frontend/`またはCD設定に変更がある場合：独立したフロントエンドジョブで静的ファイルをZIP化し、Amplifyへデプロイして完了を確認する。
-
-## 認証APIの過負荷対策
-
-認証API（登録・ログインのbegin/finish）にRedisの60秒固定ウィンドウIP別レート制限を導入する。カウントと初回TTLをLuaスクリプトで原子的に実行し、Redis障害時は503でfail closedとする。登録開始は10回/60秒、その他は20回/60秒を初期値とする。HTTP 429にRetry-Afterを付ける。IPはALB標準のX-Forwarded-For追記動作を前提とし、最後に付加された値を使用する。ECSはALBのSecurity Groupからの接続のみ受け付ける。ALBのXFFモードを変更すると安全性が崩れるため、変更時は見直す。
-
-AWS WAF v2（REGIONAL）をALBに関連付け、`/auth/`へのリクエストにIP単位のレートベースルール（60秒、100回）を適用する。WAFは厳密なリクエスト回数保証をしないためアプリ側制限と併用する。WAFには別途料金が発生する。正規ユーザーの共有IPや負荷に応じて閾値を見直す。
