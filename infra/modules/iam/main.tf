@@ -138,6 +138,27 @@ data "aws_iam_policy_document" "github_actions" {
     actions   = ["amplify:GetJob"]
     resources = ["${var.amplify_app_arn}/branches/${var.github_branch}/jobs/*"]
   }
+
+  statement {
+    sid     = "RunMigrationTask"
+    actions = ["ecs:RunTask"]
+
+    resources = [
+      "arn:aws:ecs:*:*:task-definition/${var.name}-stg-migration:*"
+    ]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "ecs:cluster"
+      values   = [var.ecs_cluster_arn]
+    }
+  }
+
+  statement {
+    sid       = "DescribeMigrationTasks"
+    actions   = ["ecs:DescribeTasks"]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_role_policy" "github_actions" {
