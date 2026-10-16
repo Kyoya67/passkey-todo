@@ -25,11 +25,11 @@ type authRateCounter interface {
 // AuthRateLimit limits sensitive unauthenticated auth routes by client IP.
 // The app must only be reachable through an ALB using the default append
 // X-Forwarded-For mode; its final XFF value is added by the trusted ALB.
-func AuthRateLimit(client *redis.Client) echo.MiddlewareFunc {
-	return authRateLimit(client, authRateScript)
+func AuthRateLimit(client *redis.Client, localDevelopment bool) echo.MiddlewareFunc {
+	return authRateLimit(client, authRateScript, localDevelopment)
 }
 
-func authRateLimit(client *redis.Client, script authRateCounter) echo.MiddlewareFunc {
+func authRateLimit(client *redis.Client, script authRateCounter, localDevelopment bool) echo.MiddlewareFunc {
 	limits := map[string]int64{
 		"/auth/registration/begin":  10,
 		"/auth/registration/finish": 20,
@@ -46,6 +46,12 @@ func authRateLimit(client *redis.Client, script authRateCounter) echo.Middleware
 				return next(c)
 			}
 			ip := albClientIP(c.Request())
+			if ip == "" && localDevelopment {
+				host, _, splitErr := net.SplitHostPort(c.Request().RemoteAddr)
+				if splitErr == nil {
+					if parsed := net.ParseIP(host); parsed != nil { ip = parsed.String() }
+				}
+			}
 			if ip == "" {
 				return c.NoContent(http.StatusServiceUnavailable)
 			}

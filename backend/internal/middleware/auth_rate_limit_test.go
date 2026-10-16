@@ -46,7 +46,7 @@ func TestAuthRateLimit(t *testing.T) {
 			e := echo.New()
 			fake := &fakeAuthRateScript{count: tc.count}
 			if tc.scriptErr { fake.err = errors.New("redis down") }
-			e.Use(authRateLimit(nil, fake))
+			e.Use(authRateLimit(nil, fake, false))
 			e.Add(tc.method, tc.path, func(c echo.Context) error { return c.NoContent(204) })
 			req := httptest.NewRequest(tc.method, tc.path, nil)
 			if tc.xff != "" { req.Header.Set("X-Forwarded-For", tc.xff) }
