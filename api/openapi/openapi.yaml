@@ -161,6 +161,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Originが許可されていない
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
@@ -216,6 +218,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Originが許可されていない
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
@@ -238,6 +242,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Originが許可されていない
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
@@ -267,6 +273,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '403':
+          description: Originが許可されていない
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
