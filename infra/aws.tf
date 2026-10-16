@@ -124,6 +124,7 @@ module "ecs" {
   database_host        = module.rds.address
   redis_host           = module.elasticache.primary_endpoint_address
   cors_allowed_origins = "https://ca-techlounge-todo.kyo8.dev,http://localhost:8081"
+  csrf_allowed_origins = "https://ca-techlounge-todo.kyo8.dev"
   region               = local.region
   tags                 = local.common_tags
 }
