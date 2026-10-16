@@ -1,30 +1,32 @@
-variable "name" { type = string }
-variable "alb_arn" { type = string }
-variable "tags" { type = map(string) }
-
 resource "aws_wafv2_web_acl" "this" {
   name  = "${var.name}-auth-rate-limit"
   scope = "REGIONAL"
 
-  default_action { allow {} }
+  default_action {
+    allow {}
+  }
 
   rule {
     name     = "authentication-rate-limit"
     priority = 0
 
-    action { block {} }
+    action {
+      block {}
+    }
 
     statement {
       rate_based_statement {
-        limit              = 100
-        aggregate_key_type = "IP"
+        limit                 = 100
+        aggregate_key_type    = "IP"
         evaluation_window_sec = 60
 
         scope_down_statement {
           byte_match_statement {
-            search_string = "/auth/"
+            search_string         = "/auth/"
             positional_constraint = "STARTS_WITH"
-            field_to_match { uri_path {} }
+            field_to_match {
+              uri_path {}
+            }
             text_transformation {
               priority = 0
               type     = "NONE"
