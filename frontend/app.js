@@ -250,7 +250,7 @@ const animateLayout = (previousPositions) => {
 const renderCard = (todo, rank = null) => `
   <article class="todo" data-id="${escapeHTML(todo.id)}" draggable="true">
     <div class="todo-details">
-      <div class="todo-title-row">${rank === null ? '' : `<span class="todo-rank" aria-label="グループ内順位 ${rank}">${rank}</span>`}<p class="todo-title">${escapeHTML(todo.title)}</p></div>
+      <div class="todo-title-row">${rank === null ? '' : `<span class="todo-rank" aria-label="グループ内順位 ${rank}">${rank}</span>`}<p class="todo-title"></p></div>
       <p class="todo-meta">更新：${new Date(todo.updatedAt).toLocaleString('ja-JP')}</p>
     </div>
     <div class="todo-actions">
@@ -290,6 +290,12 @@ const renderBoard = (todos) => {
       </section>`;
     })
     .join('');
+  // Treat API-provided titles as text, never as HTML markup.
+  for (const card of list.querySelectorAll('.todo')) {
+    const title = card.querySelector('.todo-title');
+    const todo = currentTodos.get(card.dataset.id);
+    if (title && todo) title.textContent = todo.title;
+  }
   animateLayout(previousPositions);
 };
 
