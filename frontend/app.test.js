@@ -12,17 +12,19 @@ function setup({
   savedTheme = null,
   trackLayout = false,
   reducedMotion = false,
+  firstTodoTitle = 'One',
 } = {}) {
   const listeners = {};
   const windowListeners = {};
   const calls = [];
   const animations = [];
+  const renderedTitles = new Map();
   let dropColumn = null;
   const timers = new Map();
   const storage = new Map(savedTheme ? [['todo-theme', savedTheme]] : []);
   let nextTimer = 1;
   const todos = [
-    { id: 1, title: 'One', status: 'not_started', priority: 1, updatedAt: '2026-10-15T00:00:00Z' },
+    { id: 1, title: firstTodoTitle, status: 'not_started', priority: 1, updatedAt: '2026-10-15T00:00:00Z' },
     { id: 2, title: 'Two', status: 'in_progress', priority: 1, updatedAt: '2026-10-15T00:00:00Z' },
     { id: 3, title: 'Three', status: 'completed', priority: 1, updatedAt: '2026-10-15T00:00:00Z' },
     { id: 4, title: 'Four', status: 'not_started', priority: 2, updatedAt: '2026-10-15T00:00:00Z' },
@@ -67,6 +69,12 @@ function setup({
         return [...this.innerHTML.matchAll(/<article class="todo" data-id="(\d+)"/g)].map(
           ([, id], index) => ({
             dataset: { id },
+            querySelector: (selector) => {
+              if (selector !== '.todo-title') return null;
+              const node = { textContent: '' };
+              renderedTitles.set(id, node);
+              return node;
+            },
             getBoundingClientRect: () => ({ left: 0, top: index * 100, height: 80 }),
             animate: (frames, options) => animations.push({ id, frames, options }),
           })
@@ -176,6 +184,7 @@ function setup({
     windowListeners,
     calls,
     animations,
+    renderedTitles,
     elements,
     storage,
     documentElement: context.document.documentElement,
@@ -708,4 +717,13 @@ test('theme toggles work before and after login and stay synchronized', async ()
   appToggle.listeners.click();
   assert.equal(documentElement.dataset.theme, 'dark');
   assert.equal(authToggle['aria-pressed'], 'true');
+});
+
+
+test('renders untrusted TODO titles as text rather than HTML', async () => {
+  const malicious = '<img src=x onerror="alert(1)">';
+  const { list, renderedTitles } = setup({ trackLayout: true, firstTodoTitle: malicious });
+  await tick();
+  assert.equal(renderedTitles.get('1').textContent, malicious);
+  assert.doesNotMatch(list.innerHTML, /<img|onerror=/);
 });
