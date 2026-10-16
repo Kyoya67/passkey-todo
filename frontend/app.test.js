@@ -24,7 +24,13 @@ function setup({
   const storage = new Map(savedTheme ? [['todo-theme', savedTheme]] : []);
   let nextTimer = 1;
   const todos = [
-    { id: 1, title: firstTodoTitle, status: 'not_started', priority: 1, updatedAt: '2026-10-15T00:00:00Z' },
+    {
+      id: 1,
+      title: firstTodoTitle,
+      status: 'not_started',
+      priority: 1,
+      updatedAt: '2026-10-15T00:00:00Z',
+    },
     { id: 2, title: 'Two', status: 'in_progress', priority: 1, updatedAt: '2026-10-15T00:00:00Z' },
     { id: 3, title: 'Three', status: 'completed', priority: 1, updatedAt: '2026-10-15T00:00:00Z' },
     { id: 4, title: 'Four', status: 'not_started', priority: 2, updatedAt: '2026-10-15T00:00:00Z' },
@@ -718,7 +724,6 @@ test('theme toggles work before and after login and stay synchronized', async ()
   assert.equal(documentElement.dataset.theme, 'dark');
   assert.equal(authToggle['aria-pressed'], 'true');
 });
-
 
 test('renders untrusted TODO titles as text rather than HTML', async () => {
   const malicious = '<img src=x onerror="alert(1)">';
