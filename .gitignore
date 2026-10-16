@@ -25,7 +25,9 @@ infra/**/crash.*.log
 infra/stg/moved.tf
 # Local environment files
 **/.envrc
+!/.envrc
 !infra/.envrc
+**/.envrc.local
 
 # Frontend dependencies
 frontend/node_modules/
