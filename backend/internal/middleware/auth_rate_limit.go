@@ -19,7 +19,7 @@ if count == 1 then redis.call("EXPIRE", KEYS[1], ARGV[1]) end
 return count`)
 
 type authRateCounter interface {
-	Run(context.Context, *redis.Client, []string, ...interface{}) *redis.Cmd
+	Run(context.Context, redis.Scripter, []string, ...interface{}) *redis.Cmd
 }
 
 // AuthRateLimit limits sensitive unauthenticated auth routes by client IP.

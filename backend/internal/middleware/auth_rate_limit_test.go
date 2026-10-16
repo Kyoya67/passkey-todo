@@ -2,10 +2,13 @@ package middleware
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
-	"net/http"
+	"net"
 	"net/http/httptest"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
@@ -17,7 +20,7 @@ type fakeAuthRateScript struct {
 	keys  []string
 }
 
-func (f *fakeAuthRateScript) Run(_ context.Context, _ *redis.Client, keys []string, _ ...interface{}) *redis.Cmd {
+func (f *fakeAuthRateScript) Run(_ context.Context, _ redis.Scripter, keys []string, _ ...interface{}) *redis.Cmd {
 	f.keys = keys
 	cmd := redis.NewCmd(context.Background())
 	if f.err != nil {
@@ -76,5 +79,45 @@ func TestALBClientIPUsesLastForwardedValue(t *testing.T) {
 	req.Header.Set("X-Forwarded-For", "1.2.3.4, 203.0.113.99")
 	if got := albClientIP(req); got != "203.0.113.99" {
 		t.Fatalf("untrusted leftmost address was used: %q", got)
+	}
+}
+
+func TestAuthRateLimitRedisIntegration(t *testing.T) {
+	address := os.Getenv("REDIS_TEST_ADDR")
+	if address == "" {
+		t.Skip("REDIS_TEST_ADDR is not set")
+	}
+	client := redis.NewClient(&redis.Options{Addr: address})
+	defer client.Close()
+	if err := client.Ping(context.Background()).Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	ipBytes := make([]byte, net.IPv6len)
+	if _, err := rand.Read(ipBytes); err != nil {
+		t.Fatal(err)
+	}
+	ip := net.IP(ipBytes).String()
+	key := "auth_rate:/auth/registration/begin:" + ip
+	t.Cleanup(func() { _ = client.Del(context.Background(), key).Err() })
+
+	e := echo.New()
+	e.Use(AuthRateLimit(client, false))
+	e.POST("/auth/registration/begin", func(c echo.Context) error { return c.NoContent(204) })
+	for attempt := 1; attempt <= 11; attempt++ {
+		req := httptest.NewRequest("POST", "/auth/registration/begin", nil)
+		req.Header.Set("X-Forwarded-For", ip)
+		res := httptest.NewRecorder()
+		e.ServeHTTP(res, req)
+		want := 204
+		if attempt == 11 {
+			want = 429
+		}
+		if res.Code != want {
+			t.Fatalf("attempt %d: got %d, want %d", attempt, res.Code, want)
+		}
+	}
+	if ttl := client.TTL(context.Background(), key).Val(); ttl <= 0 || ttl > time.Minute {
+		t.Fatalf("unexpected TTL: %s", ttl)
 	}
 }

@@ -4,7 +4,7 @@ REST APIのHTTP処理、業務ルール、Repositoryのsqlc呼び出しを責務
 
 ## cmd/api
 
-`main.go`では、CORS、TODOのOrigin検証、セッション検証を含む依存関係の組み立てを行う。`main`を直接起動する単体テストはなく、今回の計測では0.0%。CSRFの判定自体は`internal/middleware/csrf_test.go`でテストする。
+`main.go`では、CORS、TODOのOrigin検証、セッション検証、認証APIのレート制限を含む依存関係の組み立てを行う。`main`を直接起動する単体テストはなく、今回の計測では0.0%。判定処理は`internal/middleware`でテストする。
 
 ## internal/auth
 
@@ -80,6 +80,8 @@ REST APIのHTTP処理、業務ルール、Repositoryのsqlc呼び出しを責務
 
 `csrf_test.go`では、TODOの状態変更で許可Originを通し、別Origin・Originなし・`null`・似たドメインを403にすることを確認する。GET・OPTIONS、認証・ヘルスルートはこのミドルウェアの対象外であることも確認する。
 
+`auth_rate_limit_test.go`では、認証APIのルート別上限、超過時の429と`Retry-After`、Redis障害時の503、ALBの`X-Forwarded-For`から最終IPを採用すること、対象外ルートの通過を確認する。ローカルRedisを使う統合テストではLuaスクリプトによる10回までの通過・11回目の拒否とTTL設定を確認する。
+
 | ファイル | 関数 | カバレッジ |
 |---|---|---:|
 | auth.go | UserID | 100.0% |
@@ -87,7 +89,10 @@ REST APIのHTTP処理、業務ルール、Repositoryのsqlc呼び出しを責務
 |  | RequireTodoSession | 100.0% |
 | cors.go | CORS | 100.0% |
 | csrf.go | RequireTodoOrigin | 100.0% |
-| **パッケージ合計** |  | **100.0%** |
+| auth_rate_limit.go | AuthRateLimit | 100.0% |
+|  | authRateLimit | 83.3% |
+|  | albClientIP | 100.0% |
+| **パッケージ合計** |  | **93.8%** |
 
 ## internal/config
 
@@ -167,13 +172,13 @@ REST APIのHTTP処理、業務ルール、Repositoryのsqlc呼び出しを責務
 | internal/config | 100.0% |
 | internal/database | 22.2% |
 | internal/database/sqlc | 0.0% |
-| internal/middleware | 100.0% |
+| internal/middleware | 93.8% |
 | internal/openapi | 0.0% |
 | internal/router | 100.0% |
 | internal/todo | 90.7% |
-| **全パッケージ合計** | **65.0%** |
+| **全パッケージ合計** | **65.9%** |
 
-統合テストだけを`go test ./internal/auth ./internal/todo -run Integration -coverprofile=integration-only-coverage.out -count=1 -v`で再実行し、authの4件とTODOの1件がすべて成功した。統合テスト単独のパッケージカバレッジはauth 45.4%、TODO 24.6%。これは統合テストだけの値であり、上表の全テスト込みの値とは異なる。
+統合テストだけを`go test ./internal/auth ./internal/middleware ./internal/todo -run Integration -coverprofile=integration-only-coverage.out -count=1 -v`で再実行し、authの4件、middlewareの1件、TODOの1件がすべて成功した。統合テスト単独のパッケージカバレッジはauth 45.4%、middleware 35.4%、TODO 24.6%。これは統合テストだけの値であり、上表の全テスト込みの値とは異なる。
 
 全パッケージの値には、手動起動をエントリーポイントとする`cmd/api`、DB接続、sqlc・oapi-codegenの生成コード、Router、CORSミドルウェアが含まれる。生成コードは直接編集していない。Goのパッケージ単位の計測では、テスト対象パッケージ外にある生成sqlcコードは0.0%と表示されるため、Repository統合テストの実行有無とは区別する。
 
@@ -189,7 +194,3 @@ REST APIのHTTP処理、業務ルール、Repositoryのsqlc呼び出しを責務
 PostgreSQL・Redisの統合テストは、DBコンテナ、マイグレーション、Redisを準備し、両方の接続先を指定して実行する。
 
 - `INTEGRATION_DATABASE_URL='postgres://todo:secret@localhost:5432/todo?sslmode=disable' REDIS_TEST_ADDR='127.0.0.1:6379' go test ./... -coverprofile=coverage.out -count=1`
-
-## internal/middleware（認証APIレート制限）
-
-`auth_rate_limit.go`では、次の観点をテストしている。登録開始10回／分とログイン・完了20回／分、超過時429とRetry-After、Redis障害時503、X-Forwarded-Forの最終IP採用、不正IPの拒否、対象外ルートを検証する。Redis Luaスクリプトの実Redis統合試験は未実施。カバレッジは未計測（GitHub Actionsの課金制限・ローカル依存環境未構築のため）。
