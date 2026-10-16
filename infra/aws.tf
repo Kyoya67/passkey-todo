@@ -149,6 +149,13 @@ module "alb" {
   tags              = local.common_tags
 }
 
+module "waf" {
+  source  = "./modules/waf"
+  name    = local.project
+  alb_arn = module.alb.arn
+  tags    = local.common_tags
+}
+
 module "route53" {
   source = "./modules/route53"
 

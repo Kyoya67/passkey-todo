@@ -390,3 +390,9 @@ CIではAWSへのデプロイは行わず、コードとTerraform構成の静的
 TODOの状態変更は`CSRF_ALLOWED_ORIGINS`に含まれるOriginのみ許可する。CORSの`CORS_ALLOWED_ORIGINS`とは分離し、本番では正規フロントエンドのみをCSRF許可対象にする。ローカルでは開発フロントエンドのOriginを設定する。Originのないcurl等の状態変更操作は403とする。
 
 Swagger UIは`compose.yaml`の`swagger-ui`サービスから`http://localhost:8081`で起動でき、OpenAPIの`servers`からローカル・AWS APIを選択できる。ただしSwagger UIにはパスキー認証操作が統合されておらず、Cookieは`SameSite=Strict`のため、ローカルSwaggerからAWSの認証付きTODO操作を実行できない。CORSにはSwagger用Originを残すが、CSRF許可Originには追加しない。`GET /health`等の匿名読み取りの疎通確認に限定する。認証付きの操作は正規フロントエンドを使用する。
+
+## 認証APIの過負荷対策（2026-10-16）
+
+認証API（登録・ログインのbegin/finish）にRedisの60秒固定ウィンドウIP別レート制限を導入する。カウントと初回TTLをLuaスクリプトで原子的に実行し、Redis障害時は503でfail closedとする。登録開始は10回/60秒、その他は20回/60秒を初期値とする。HTTP 429にRetry-Afterを付ける。IPはALB標準のX-Forwarded-For追記動作を前提とし、最後に付加された値を使用する。ECSはALBのSecurity Groupからの接続のみ受け付ける。ALBのXFFモードを変更すると安全性が崩れるため、変更時は見直す。
+
+AWS WAF v2（REGIONAL）をALBに関連付け、`/auth/`へのリクエストにIP単位のレートベースルール（60秒、100回）を適用する。WAFは厳密なリクエスト回数保証をしないためアプリ側制限と併用する。WAFには別途料金が発生する。正規ユーザーの共有IPや負荷に応じて閾値を見直す。
