@@ -49,7 +49,9 @@ func authRateLimit(client *redis.Client, script authRateCounter, localDevelopmen
 			if ip == "" && localDevelopment {
 				host, _, splitErr := net.SplitHostPort(c.Request().RemoteAddr)
 				if splitErr == nil {
-					if parsed := net.ParseIP(host); parsed != nil { ip = parsed.String() }
+					if parsed := net.ParseIP(host); parsed != nil {
+						ip = parsed.String()
+					}
 				}
 			}
 			if ip == "" {
