@@ -334,25 +334,19 @@ sequenceDiagram
 
 AWS環境は1つのみ構築する。
 
-```mermaid
-flowchart TD
-    Client["HTTP Client"]
-    ALB["Application Load Balancer"]
-    ECS["Amazon ECS Fargate<br/>Go + Echo"]
-    DB[("PostgreSQL")]
-    ECR["Amazon ECR"]
-    CW["Amazon CloudWatch Logs"]
+![AWS構成図](aws-architecture.svg)
 
-    Client -->|HTTP / HTTPS| ALB
-    ALB --> ECS
-    ECS -->|SQL| DB
-    ECR -.->|Container Image| ECS
-    ECS -.->|Logs| CW
-```
+編集用ファイル：[aws-architecture.drawio](aws-architecture.drawio)
 
-Terraformのルート設定からAWSサービス単位のモジュールを呼び出す。VPC、ネットワーク、セキュリティグループ、ALB、ECS、ECR、RDS、ElastiCache、Secrets Manager、CloudWatch Logs、IAMを分離して管理し、ルートの`aws.tf`ではモジュール間の依存関係を接続する。
+フロントエンドはAmplifyで配信し、APIへのリクエストはRoute 53、WAF、ALBを経てECS FargateのGoサーバーへ届く。ECSはプライベートサブネットのRDSにTODO・認証情報を、ElastiCache for Redisにチャレンジ・セッションなどの短期データを保存する。コンテナイメージはECRで管理し、DBマイグレーションは専用のECSタスクで実行する。
 
-RDSはプライベートサブネットに配置し、ALBはパブリックサブネットに配置する。ECSタスクはコストを抑えるため初期のdesired countを0とし、必要時だけ起動する。RDSの`rds.force_ssl`を有効化し、ECSでは`sslmode=verify-full`とAWS RDS CAバンドルを指定する。ローカルComposeではPostgreSQLがTLS未設定のため、`DB_SSLMODE=disable`を既定値とし、環境変数で接続設定を切り替える。
+GitHub ActionsのCDは`main`へのpush時に変更箇所を判定し、OIDCでAWSに認証して次を実行する。Terraformの`apply`は行わない。
+
+- `backend/`、`api/`、`infra/`またはCD設定に変更がある場合：バックエンドイメージをコミットハッシュでECRへpushし、そのイメージを指定したECSタスク定義の新しいリビジョンを登録してServiceを更新する。
+- `backend/db/migration/`に変更がある場合：上記に加え、マイグレーション用イメージをECRへpushし、専用タスク定義の新しいリビジョンでワンショットタスクを実行する。成功後にバックエンドのServiceを更新する。
+- `frontend/`またはCD設定に変更がある場合：静的ファイルをZIP化してAmplifyへアップロード・デプロイする。
+
+Webサーバー用ECSタスクとマイグレーションタスクは、NAT Gatewayを設けずにECRなどのAWSサービスへ接続できるよう、パブリックサブネットでパブリックIPを使う構成とした。これはコストを抑えるための選択であり、プライベート配置と同等の隔離ではない。Webサーバーへの着信はセキュリティグループでALBからの8080番に限定し、RDSとRedisへの着信はECSからのみ許可する。図のAZごとの配置は概念図で、ECSタスクを特定のAZに固定しているわけではない。
 
 ---
 
@@ -385,13 +379,7 @@ CIではAWSへのデプロイは行わず、コードとTerraform構成の静的
 - `backend/db/migration/`に変更がある場合：上記のバックエンドジョブ内でマイグレーション用イメージをECRへpushし、ECSワンショットタスクで適用する。成功後にバックエンドをデプロイする。
 - `frontend/`またはCD設定に変更がある場合：独立したフロントエンドジョブで静的ファイルをZIP化し、Amplifyへデプロイして完了を確認する。
 
-## TODO APIのCSRFとSwagger UIの方針（2026-10-16）
-
-TODOの状態変更は`CSRF_ALLOWED_ORIGINS`に含まれるOriginのみ許可する。CORSの`CORS_ALLOWED_ORIGINS`とは分離し、本番では正規フロントエンドのみをCSRF許可対象にする。ローカルでは開発フロントエンドのOriginを設定する。Originのないcurl等の状態変更操作は403とする。
-
-Swagger UIは`compose.yaml`の`swagger-ui`サービスから`http://localhost:8081`で起動でき、OpenAPIの`servers`からローカル・AWS APIを選択できる。ただしSwagger UIにはパスキー認証操作が統合されておらず、Cookieは`SameSite=Strict`のため、ローカルSwaggerからAWSの認証付きTODO操作を実行できない。CORSにはSwagger用Originを残すが、CSRF許可Originには追加しない。`GET /health`等の匿名読み取りの疎通確認に限定する。認証付きの操作は正規フロントエンドを使用する。
-
-## 認証APIの過負荷対策（2026-10-16）
+## 認証APIの過負荷対策
 
 認証API（登録・ログインのbegin/finish）にRedisの60秒固定ウィンドウIP別レート制限を導入する。カウントと初回TTLをLuaスクリプトで原子的に実行し、Redis障害時は503でfail closedとする。登録開始は10回/60秒、その他は20回/60秒を初期値とする。HTTP 429にRetry-Afterを付ける。IPはALB標準のX-Forwarded-For追記動作を前提とし、最後に付加された値を使用する。ECSはALBのSecurity Groupからの接続のみ受け付ける。ALBのXFFモードを変更すると安全性が崩れるため、変更時は見直す。
 
