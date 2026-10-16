@@ -4,6 +4,7 @@
   font-family: Inter, system-ui, sans-serif;
   color: #17212b;
   background: #eef5f0;
+  overscroll-behavior-y: none;
 }
 * {
   box-sizing: border-box;
@@ -11,6 +12,7 @@
 body {
   margin: 0;
   min-height: 100dvh;
+  overscroll-behavior-y: none;
   -webkit-user-select: none;
   user-select: none;
   background:
@@ -73,6 +75,7 @@ textarea,
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  min-width: 0;
   min-height: 220px;
   padding: 24px;
   border: 1px solid rgba(255, 255, 255, 0.8);
@@ -619,6 +622,24 @@ form input {
   }
   .kanban-column {
     scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 680px), (max-height: 500px) and (pointer: coarse) {
+  .auth-dialog {
+    scrollbar-width: none;
+  }
+  .auth-dialog::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (max-height: 500px) and (pointer: coarse) {
+  .auth-dialog {
+    width: calc(100% - 16px);
+  }
+  .auth-dialog-content {
+    padding: 20px;
   }
 }
 
