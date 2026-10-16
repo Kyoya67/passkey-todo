@@ -13,14 +13,14 @@ func TestLoad(t *testing.T) {
 		{name: "origin only", origin: "http://localhost:3000", wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			for key, value := range map[string]string{"APP_PORT": "8080", "DB_HOST": "localhost", "DB_PORT": "5432", "DB_USER": "todo", "DB_PASSWORD": "test", "DB_NAME": "todo", "DB_SSLMODE": "", "DB_SSLROOTCERT": "", "CORS_ALLOWED_ORIGINS": " http://localhost:3000, ,http://localhost:8081 ", "WEBAUTHN_RP_ID": tc.rpID, "WEBAUTHN_ORIGIN": tc.origin, "REDIS_ADDR": "localhost:6379", "REDIS_TLS": "false"} {
+			for key, value := range map[string]string{"APP_PORT": "8080", "DB_HOST": "localhost", "DB_PORT": "5432", "DB_USER": "todo", "DB_PASSWORD": "test", "DB_NAME": "todo", "DB_SSLMODE": "", "DB_SSLROOTCERT": "", "CORS_ALLOWED_ORIGINS": " http://localhost:3000, ,http://localhost:8081 ", "CSRF_ALLOWED_ORIGINS": "http://localhost:3000", "WEBAUTHN_RP_ID": tc.rpID, "WEBAUTHN_ORIGIN": tc.origin, "REDIS_ADDR": "localhost:6379", "REDIS_TLS": "false"} {
 				t.Setenv(key, value)
 			}
 			cfg, err := Load()
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("error %v, wantErr %v", err, tc.wantErr)
 			}
-			if err == nil && (cfg.WebAuthnRPID != tc.rpID || cfg.WebAuthnOrigin != tc.origin || cfg.DBSSLMode != "disable" || cfg.RedisAddress != "localhost:6379" || cfg.RedisTLS || len(cfg.CORSAllowedOrigins) != 2) {
+			if err == nil && (cfg.WebAuthnRPID != tc.rpID || cfg.WebAuthnOrigin != tc.origin || cfg.DBSSLMode != "disable" || cfg.RedisAddress != "localhost:6379" || cfg.RedisTLS || len(cfg.CORSAllowedOrigins) != 2 || len(cfg.CSRFAllowedOrigins) != 1) {
 				t.Fatal("configuration differs from environment")
 			}
 			if !tc.wantErr {
@@ -31,6 +31,11 @@ func TestLoad(t *testing.T) {
 					}
 					t.Setenv("REDIS_ADDR", "localhost:6379")
 				}
+				t.Setenv("CSRF_ALLOWED_ORIGINS", "")
+				if _, err := Load(); err == nil {
+					t.Fatal("missing CSRF origins accepted")
+				}
+				t.Setenv("CSRF_ALLOWED_ORIGINS", "http://localhost:3000")
 				t.Setenv("APP_PORT", "")
 				if _, err := Load(); err == nil {
 					t.Fatal("missing port accepted")

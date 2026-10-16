@@ -36,6 +36,7 @@ resource "aws_ecs_task_definition" "this" {
       { name = "DB_SSLMODE", value = "verify-full" },
       { name = "DB_SSLROOTCERT", value = "/etc/ssl/certs/rds-global-bundle.pem" },
       { name = "CORS_ALLOWED_ORIGINS", value = var.cors_allowed_origins },
+      { name = "CSRF_ALLOWED_ORIGINS", value = var.csrf_allowed_origins },
       { name = "WEBAUTHN_RP_ID", value = "ca-techlounge-todo.kyo8.dev" },
       { name = "WEBAUTHN_ORIGIN", value = "https://ca-techlounge-todo.kyo8.dev" },
       { name = "REDIS_ADDR", value = "${var.redis_host}:6379" },
