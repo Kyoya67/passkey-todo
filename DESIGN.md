@@ -384,3 +384,9 @@ CIではAWSへのデプロイは行わず、コードとTerraform構成の静的
 - `backend/`、`api/`、`infra/`またはCD設定に変更がある場合：バックエンドイメージをコミットハッシュでECRへpushし、ECSタスク定義とServiceを更新する。
 - `backend/db/migration/`に変更がある場合：上記のバックエンドジョブ内でマイグレーション用イメージをECRへpushし、ECSワンショットタスクで適用する。成功後にバックエンドをデプロイする。
 - `frontend/`またはCD設定に変更がある場合：独立したフロントエンドジョブで静的ファイルをZIP化し、Amplifyへデプロイして完了を確認する。
+
+## TODO APIのCSRFとSwagger UIの方針（2026-10-16）
+
+TODOの状態変更は`CSRF_ALLOWED_ORIGINS`に含まれるOriginのみ許可する。CORSの`CORS_ALLOWED_ORIGINS`とは分離し、本番では正規フロントエンドのみをCSRF許可対象にする。ローカルでは開発フロントエンドのOriginを設定する。Originのないcurl等の状態変更操作は403とする。
+
+Swagger UIは`compose.yaml`の`swagger-ui`サービスから`http://localhost:8081`で起動でき、OpenAPIの`servers`からローカル・AWS APIを選択できる。ただしSwagger UIにはパスキー認証操作が統合されておらず、Cookieは`SameSite=Strict`のため、ローカルSwaggerからAWSの認証付きTODO操作を実行できない。CORSにはSwagger用Originを残すが、CSRF許可Originには追加しない。`GET /health`等の匿名読み取りの疎通確認に限定する。認証付きの操作は正規フロントエンドを使用する。
