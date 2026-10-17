@@ -1,4 +1,4 @@
-.PHONY: db-migrate-up db-migrate-down db-migrate-force db-migrate-ecs ecs-start ecs-stop ecs-status check-aws-env
+.PHONY: db-migrate-up db-migrate-down db-migrate-force db-migrate-ecs ecs-start ecs-stop ecs-status rds-stop check-aws-env check-rds-env
 
 db-migrate-up:
 	docker compose --profile migration run --rm migration up
@@ -32,3 +32,11 @@ ecs-status: check-aws-env
 		--services $(ECS_SERVICE) \
 		--query 'services[0].{desired:desiredCount,running:runningCount,pending:pendingCount,status:status}' \
 		--output table
+
+check-rds-env:
+	@test -n "$(AWS_PROFILE)" && test -n "$(AWS_REGION)" && test -n "$(RDS_INSTANCE_IDENTIFIER)" || \
+		(echo "AWS_PROFILE, AWS_REGION, and RDS_INSTANCE_IDENTIFIER are required; load .envrc with direnv" >&2; exit 1)
+
+rds-stop: check-rds-env
+	AWS_PROFILE=$(AWS_PROFILE) AWS_REGION=$(AWS_REGION) aws rds stop-db-instance \
+		--db-instance-identifier $(RDS_INSTANCE_IDENTIFIER)
