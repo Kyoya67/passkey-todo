@@ -1,8 +1,11 @@
-# ドキュメント全体像
+# Kyoya67 TODO
+
+パスキーで登録・ログインし、TODOをユーザーごとに管理できるWebアプリケーション。
+
+## ドキュメント全体像
 
 | ドキュメント | 内容 |
 |---|---|
-| [ASSIGNMENT.md](ASSIGNMENT.md) | 選考課題の要件、提出条件、注意事項 |
 | [DESIGN.md](DESIGN.md) | 開発方針、構成、技術選定、設計判断 |
 | [AGENTS.md](AGENTS.md) | 開発時の実装・ドキュメント・AI利用記録のルール |
 | [backend/TESTING.md](backend/TESTING.md) | 単体テスト、統合テスト、カバレッジ、検証方法 |
@@ -86,7 +89,7 @@ make db-migrate-force VERSION=1
 
 ブラウザで[http://localhost:8081](http://localhost:8081)を開く。各エンドポイントを選択して「Try it out」を押し、必要なパラメータやリクエストボディを入力して「Execute」を押す。レスポンスのステータスコードとJSONを確認する。
 
-Swagger UIでは、次の4つの必須APIを順番に確認できる。
+Swagger UIでは、次の4つのTODO APIを順番に確認できる。
 
 1. `POST /todos`でTODOを作成する
 2. `GET /todos`で一覧を取得する
@@ -116,7 +119,7 @@ docker compose down
 ### Swagger UI確認
 クラウド上のAPIをSwagger UIから確認する場合は、ローカル環境を起動して[http://localhost:8081](http://localhost:8081)を開く。画面上部のサーバー選択欄で`AWS上のAPI`を選択すると、ローカルSwagger UIからクラウドAPIを実行できる。
 
-必須APIは次の順番で確認する。
+TODO APIは次の順番で確認する。
 
 1. `GET /health`でHTTP 200とヘルスチェック結果を確認する
 2. `POST /todos`でTODOを作成する

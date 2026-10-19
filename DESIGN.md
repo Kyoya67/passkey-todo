@@ -33,7 +33,6 @@ kyoya67-todo/
 ├── infra/
 ├── ai-usage/
 ├── compose.yaml
-├── ASSIGNMENT.md
 ├── AGENTS.md
 ├── DESIGN.md
 └── README.md
@@ -67,7 +66,7 @@ ChatGPTを要件整理・技術選定・設計相談とIssueの作成に、OpenA
 
 ### 3.1 バックエンド言語
 
-課題文にGoでの実装を推奨する旨が記載されているため、本プロジェクトではGoを採用する。
+GoはHTTPサーバーをシンプルに構成でき、型とテストを用いてAPIの振る舞いを検証しやすいため採用した。
 
 ### 3.2 Webフレームワーク
 
@@ -106,11 +105,11 @@ SQLまたはデータベーススキーマを変更した場合は、開発時�
 
 | **採用** | **技術** | **判断理由** |
 |---|---|---|
-| ○ | OpenAPI | 必須要件であるREST APIのエンドポイント、パラメータ、リクエスト・レスポンス、HTTPステータスを管理する。課題文で明示された必須要件ではないが、仕様と実装の対応を確認しやすくするため採用する |
+| ○ | OpenAPI | REST APIのエンドポイント、パラメータ、リクエスト・レスポンス、HTTPステータスを管理し、仕様と実装の対応を確認しやすくする |
 | ○ | oapi-codegen（Echo server） | OpenAPIを正としてGoの型、Echo用Server Interface、ルーティング登録コードを生成し、仕様と実装の不整合をコンパイル時に検出しやすくする |
-| △ | Protocol Buffers（`.proto`） | 課題文の追加要件であるgRPCを実装する場合に、サービス、RPCメソッド、メッセージ型を定義する。gRPCを実装する余裕がある場合に採用する |
-| △ | GraphQL Schema | 課題文の追加要件であるGraphQLを実装する場合に、Query、Mutation、型、入力値を定義する。GraphQLを実装する余裕がある場合に採用する |
-| △ | Protocol Buffers（`.proto`） + Connect | Connectを追加で採用する場合に、RPCメソッドとメッセージ型を定義する。課題文にConnectの指定はないため、gRPCやGraphQLより優先しない |
+| △ | Protocol Buffers（`.proto`） | gRPCを追加する場合に、サービス、RPCメソッド、メッセージ型を定義する |
+| △ | GraphQL Schema | GraphQLを追加する場合に、Query、Mutation、型、入力値を定義する |
+| △ | Protocol Buffers（`.proto`） + Connect | Connectを追加で採用する場合に、RPCメソッドとメッセージ型を定義する |
 | — | AsyncAPI | 現時点ではイベント駆動のメッセージングを実装しないため採用しない |
 
 #### OpenAPI・oapi-codegenの採用経緯
