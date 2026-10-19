@@ -2,15 +2,38 @@
 
 パスキーで登録・ログインし、TODOをユーザーごとに管理できるWebアプリケーション。
 
+## 公開中のアプリ
+[https://ca-techlounge-todo.kyo8.dev/](https://ca-techlounge-todo.kyo8.dev/)
+
+ブラウザでパスキーを使って登録・ログインし、TODOを管理できます。TODOの作成、検索、編集、削除に加え、ドラッグ操作で状態や優先順位を変更できます。
+APIは運用コストを抑えるため停止している場合があります。その間はログインやTODO操作を利用できません。
+
+## 画面の見た目
+
+ライトモードは淡いグリーンとブルーの背景に白いカードを重ねた、明るいデザインです。ダークモードは深緑の背景と落ち着いた色のカードで、同じ操作を利用できます。ログイン画面とTODOボードのどちらでも、画面右上のアイコンから切り替えられます。
+
+ログイン画面ではパスキーの登録・ログインを選択できます。ログイン後のTODOボードは「未着手」「進行中」「完了」の3列に分かれ、優先度ごとにタスクを表示します。
+
+### パスキー登録・ログイン画面
+
+| ライトモード | ダークモード |
+|---|---|
+| ![ライトモードのパスキー登録・ログイン画面](docs/screenshots/passkey-login-light.png) | ![ダークモードのパスキー登録・ログイン画面](docs/screenshots/passkey-login-dark.png) |
+
+### TODOボード
+
+| ライトモード | ダークモード |
+|---|---|
+| ![ライトモードのTODOボード。未着手・進行中・完了の3列にTODOを表示](docs/screenshots/todo-board-light.png) | ![ダークモードのTODOボード。未着手・進行中・完了の3列にTODOを表示](docs/screenshots/todo-board-dark.png) |
+
 ## ドキュメント全体像
 
 | ドキュメント | 内容 |
 |---|---|
 | [DESIGN.md](DESIGN.md) | 開発方針、構成、技術選定、設計判断 |
-| [AGENTS.md](AGENTS.md) | 開発時の実装・ドキュメント・AI利用記録のルール |
+| [AGENTS.md](AGENTS.md) | 開発時の実装・ドキュメントのルール |
 | [backend/TESTING.md](backend/TESTING.md) | 単体テスト、統合テスト、カバレッジ、検証方法 |
 | [api/openapi/openapi.yaml](api/openapi/openapi.yaml) | REST API仕様の正となるOpenAPI定義、コード生成元 |
-| [ai-usage/](ai-usage/) | PRごとの生成AI利用記録、利用箇所と検証方法 |
 
 # 考察
 
@@ -61,7 +84,7 @@ cd ..
 npx serve frontend -l 3000
 `````
 
-ブラウザで[http://localhost:3000](http://localhost:3000)を開く。ローカルで立ち上げたフロントエンドでは`http://localhost:8080`をAPI URLとして自動設定する。API URLは画面から変更できず、「接続確認」ボタンでヘルスチェックだけを実行できる。
+ブラウザで[http://localhost:3000](http://localhost:3000)を開く。ローカルで立ち上げたフロントエンドでは`http://localhost:8080`をAPI URLとして自動設定する。
 
 ### マイグレーション
 
@@ -108,15 +131,8 @@ docker compose down
 
 `docker compose down -v`を実行するとPostgreSQLのボリュームも削除されるため、保存データを削除する場合以外は使用しない。
 
-## クラウド環境の動作確認
+## クラウドAPIをSwagger UIで確認する
 
-### フロントエンド確認
-デプロイ済みのフロントエンドをブラウザで[https://ca-techlounge-todo.kyo8.dev](https://ca-techlounge-todo.kyo8.dev)を開く。クラウド上のフロントエンドでは`https://api.ca-techlounge-todo.kyo8.dev`をAPI URLとして自動設定する。API URLは画面から変更できず、「接続確認」ボタンでヘルスチェックだけを実行できる。
-
-画面の「接続確認」でAPIへ接続できることを確認する。その後、TODOの作成、一覧取得、タイトル検索、更新、削除を画面から実行する。
-
-
-### Swagger UI確認
 クラウド上のAPIをSwagger UIから確認する場合は、ローカル環境を起動して[http://localhost:8081](http://localhost:8081)を開く。画面上部のサーバー選択欄で`AWS上のAPI`を選択すると、ローカルSwagger UIからクラウドAPIを実行できる。
 
 TODO APIは次の順番で確認する。

@@ -31,7 +31,6 @@ kyoya67-todo/
 ├── frontend/
 ├── api/
 ├── infra/
-├── ai-usage/
 ├── compose.yaml
 ├── AGENTS.md
 ├── DESIGN.md
@@ -42,7 +41,6 @@ kyoya67-todo/
 - `frontend/`は静的フロントエンドを管理し、AWS Amplify Hostingで配信する。
 - `api/`ではバックエンドとフロントエンドで共有するAPI仕様をopenapiで管理する。
 - `infra/`ではAWS ECS Fargate、ECR、RDS、IAM、Route 53、Amplifyなどのインフラ構成をTerraformで管理する。
-- `ai-usage/`ではPull RequestごとのAI利用記録を管理する。
 
 ### 1.3 環境変数
 
@@ -60,7 +58,7 @@ kyoya67-todo/
 
 ChatGPTを要件整理・技術選定・設計相談とIssueの作成に、OpenAI Codexを実装・テスト・調査の支援に利用する。IssueはGitHub Projectsで管理し、変更はPull Requestでレビューする。AIの提案を採用するかは開発者が判断し、変更内容と動作を検証する。
 
-具体的な利用内容、判断と検証結果は[AI利用履歴](ai-usage/)にPRごとに記録する。Codexの作業ルールと記録方法は[AGENTS.md](AGENTS.md)に定める。
+Codexの作業ルールは[AGENTS.md](AGENTS.md)に定める。
 
 ## 3. 技術選定とトレードオフ
 
