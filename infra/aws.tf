@@ -179,12 +179,11 @@ resource "aws_ecs_service" "backend" {
   name            = local.project
   cluster         = module.ecs.cluster_id
   task_definition = module.ecs.task_definition_arn
-  desired_count   = 0
+  desired_count   = 1
   launch_type     = "FARGATE"
 
   lifecycle {
     ignore_changes = [
-      desired_count,
       task_definition,
     ]
   }
