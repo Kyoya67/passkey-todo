@@ -136,6 +136,14 @@ ECS Serviceは必要時のみタスク数を1に増やし、利用しない場�
 | — | CloudFormation | AWSとの統合度は高いが、今回はTerraformの利用を優先する |
 | — | 手動構築 | 初期検証は容易だが、構成の再現性や変更管理の面で不利 |
 
+#### 3.7.1 Lightsail移行の段階的なTerraform管理
+
+Issue #1のLightsail移行では、既存のECRとECSタスク定義を将来の復帰先として保持する必要がある。一方、LightsailのCompose、データ移行、CD切替が未検証の状態で既存ALB向けDNSやAWSリソースを自動的に切り替えると、復旧前に本番APIを停止させるリスクがある。
+
+そのためTerraformでは、Lightsailインスタンス、静的IP、SSH・HTTP・HTTPSの公開ポートを`enable_lightsail`で段階的に作成できるようにし、既定値は`false`とする。APIのRoute 53レコードも既定ではALBを向け、移行検証後に`api_dns_target = "lightsail"`を明示して切り替える。Lightsailのuser dataではDockerとComposeプラグインを導入するが、本番Compose、データ移行、バックアップ、CDは別の変更として扱う。
+
+この構成は一時的に旧構成とLightsailを並存させるため、両方を有効化した期間は固定費が増える。DNS切替と旧RDS・ElastiCache・ALB・WAFの停止・削除は、バックアップと復元を検証した後に別途実施する。
+
 ### 3.8 CI/CD
 
 | 採用 | 技術 | 判断理由 |

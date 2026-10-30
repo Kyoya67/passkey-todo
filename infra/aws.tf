@@ -163,6 +163,8 @@ module "route53" {
   record_name  = "api.ca-techlounge-todo.kyo8.dev"
   alb_dns_name = module.alb.dns_name
   alb_zone_id  = module.alb.zone_id
+  target_type  = var.api_dns_target
+  target_ip    = var.enable_lightsail && var.api_dns_target == "lightsail" ? module.lightsail[0].static_ip : null
   tags         = local.common_tags
 }
 
@@ -173,6 +175,20 @@ module "amplify" {
   branch_name = "main"
   domain_name = "ca-techlounge-todo.kyo8.dev"
   tags        = local.common_tags
+}
+
+module "lightsail" {
+  count  = var.enable_lightsail ? 1 : 0
+  source = "./modules/lightsail"
+
+  name              = local.project
+  availability_zone = var.lightsail_availability_zone
+  blueprint_id      = var.lightsail_blueprint_id
+  bundle_id         = var.lightsail_bundle_id
+  key_pair_name     = var.lightsail_key_pair_name
+  ssh_cidr_blocks   = var.lightsail_ssh_cidr_blocks
+  user_data         = "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-compose-v2 unattended-upgrades && systemctl enable --now docker && systemctl enable --now unattended-upgrades"
+  tags              = local.common_tags
 }
 
 resource "aws_ecs_service" "backend" {
@@ -221,6 +237,10 @@ output "migration_subnet_ids" {
 
 output "ecs_security_group_id" {
   value = module.security_groups.ecs_id
+}
+
+output "lightsail_static_ip" {
+  value = var.enable_lightsail ? module.lightsail[0].static_ip : null
 }
 
 output "route53_name_servers" {
