@@ -145,6 +145,8 @@ ECS Serviceは必要時のみタスク数を1に増やし、利用しない場�
 
 GitHub Actions用のOIDCプロバイダー、IAMロール、信頼ポリシー、ECR・ECS操作権限はTerraformの`infra/modules/iam/`で管理する。OIDCプロバイダーのAudienceは`sts.amazonaws.com`とし、信頼対象は対象リポジトリの`main`ブランチに限定する。
 
+旧リポジトリのCDを維持しつつ、公開ポートフォリオリポジトリ`Kyoya67/passkey-todo`には別のIAMロールを用意する。両ロールは既存のOIDCプロバイダーを共有し、各リポジトリのIDを含む`main`のSubjectだけを信頼する。デプロイ権限は既存CDと同じECR・ECS・Amplify操作に限定する。ただし両リポジトリが同一AWS環境を更新できるため、意図しないデプロイを防ぐには`main`の保護と旧CDの運用整理が別途必要となる。
+
 ### 3.9 Go外部パッケージ
 
 | **分類** | **importするパッケージ** | **用途** |

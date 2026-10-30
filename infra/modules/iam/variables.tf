@@ -4,6 +4,7 @@ variable "log_group_arn" { type = string }
 variable "ecr_repository_arn" { type = string }
 variable "migration_ecr_repository_arn" { type = string }
 variable "github_repository" { type = string }
+variable "portfolio_github_repository" { type = string }
 variable "github_branch" { type = string }
 variable "ecs_cluster_arn" { type = string }
 variable "amplify_app_arn" { type = string }
