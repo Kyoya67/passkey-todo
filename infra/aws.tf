@@ -101,8 +101,7 @@ module "iam" {
   log_group_arn                = module.logs.arn
   ecr_repository_arn           = module.ecr.arn
   migration_ecr_repository_arn = module.ecr_migration.arn
-  github_repository            = "catechlounge@134475136/kyoya67-todo@1410211307"
-  portfolio_github_repository  = "Kyoya67@86813838/passkey-todo@1425009180"
+  github_repository            = "Kyoya67@86813838/passkey-todo@1425009180"
   github_branch                = "main"
   ecs_cluster_arn              = "arn:aws:ecs:${local.region}:${local.account_id}:cluster/${local.project}"
   amplify_app_arn              = module.amplify.app_arn
@@ -180,12 +179,11 @@ resource "aws_ecs_service" "backend" {
   name            = local.project
   cluster         = module.ecs.cluster_id
   task_definition = module.ecs.task_definition_arn
-  desired_count   = 0
+  desired_count   = 1
   launch_type     = "FARGATE"
 
   lifecycle {
     ignore_changes = [
-      desired_count,
       task_definition,
     ]
   }
@@ -211,10 +209,6 @@ output "api_domain_name" {
 
 output "ecs_cluster_name" {
   value = module.ecs.cluster_id
-}
-
-output "portfolio_github_actions_role_arn" {
-  value = module.iam.portfolio_github_actions_role_arn
 }
 
 output "migration_task_definition_arn" {

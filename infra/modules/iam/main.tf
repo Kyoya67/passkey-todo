@@ -166,38 +166,3 @@ resource "aws_iam_role_policy" "github_actions" {
   role   = aws_iam_role.github_actions.id
   policy = data.aws_iam_policy_document.github_actions.json
 }
-
-data "aws_iam_policy_document" "portfolio_github_actions_assume" {
-  statement {
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-
-    principals {
-      type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github.arn]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:aud"
-      values   = ["sts.amazonaws.com"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.portfolio_github_repository}:ref:refs/heads/${var.github_branch}"]
-    }
-  }
-}
-
-resource "aws_iam_role" "portfolio_github_actions" {
-  name               = "${var.name}-portfolio-github-actions"
-  assume_role_policy = data.aws_iam_policy_document.portfolio_github_actions_assume.json
-  tags               = var.tags
-}
-
-resource "aws_iam_role_policy" "portfolio_github_actions" {
-  name   = "${var.name}-portfolio-github-actions-policy"
-  role   = aws_iam_role.portfolio_github_actions.id
-  policy = data.aws_iam_policy_document.github_actions.json
-}
