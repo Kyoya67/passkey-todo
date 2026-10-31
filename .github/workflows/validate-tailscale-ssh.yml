@@ -1,0 +1,57 @@
+name: Validate Tailscale SSH
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  LIGHTSAIL_HOST: ${{ vars.LIGHTSAIL_HOST }}
+  LIGHTSAIL_SSH_USER: ${{ vars.LIGHTSAIL_SSH_USER }}
+
+jobs:
+  tailscale-ssh:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate deployment variables
+        env:
+          TAILSCALE_OAUTH_CLIENT_ID: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          TAILSCALE_OAUTH_SECRET: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          LIGHTSAIL_SSH_PRIVATE_KEY: ${{ secrets.LIGHTSAIL_SSH_PRIVATE_KEY }}
+        run: |
+          set -eu
+          for variable in LIGHTSAIL_HOST LIGHTSAIL_SSH_USER; do
+            if [ -z "${!variable:-}" ]; then
+              echo "GitHub repository variable ${variable} is required" >&2
+              exit 1
+            fi
+          done
+          for variable in TAILSCALE_OAUTH_CLIENT_ID TAILSCALE_OAUTH_SECRET LIGHTSAIL_SSH_PRIVATE_KEY; do
+            if [ -z "${!variable:-}" ]; then
+              echo "GitHub secret ${variable} is required" >&2
+              exit 1
+            fi
+          done
+
+      - name: Connect to Tailscale with the CD tag
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          tags: tag:passkey-todo-cd
+
+      - name: Connect to Lightsail over SSH
+        env:
+          LIGHTSAIL_SSH_PRIVATE_KEY: ${{ secrets.LIGHTSAIL_SSH_PRIVATE_KEY }}
+        run: |
+          set -eu
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${LIGHTSAIL_SSH_PRIVATE_KEY}" > ~/.ssh/lightsail_cd
+          chmod 600 ~/.ssh/lightsail_cd
+          ssh-keyscan -H "${LIGHTSAIL_HOST}" >> ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -i ~/.ssh/lightsail_cd \
+            "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}" \
+            'printf "Tailscale SSH validation succeeded: %s\\n" "$(hostname)"'
