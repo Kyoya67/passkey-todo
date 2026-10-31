@@ -145,6 +145,8 @@ ECS Serviceは必要時のみタスク数を1に増やし、利用しない場�
 
 GitHub Actions用のOIDCプロバイダー、IAMロール、信頼ポリシー、ECR・ECS操作権限はTerraformの`infra/modules/iam/`で管理する。OIDCプロバイダーのAudienceは`sts.amazonaws.com`とし、信頼対象は対象リポジトリの`main`ブランチに限定する。
 
+ECS向けのCDは`.github/workflows/cd-ecs.yml`として残し、手動実行だけに限定する。Lightsail向けのCDは`.github/workflows/cd-lightsail.yml`で管理し、`main`へのマージ後のpushで実行する。Lightsail CDはAWS OIDCでECRへイメージをPushした後、TailscaleのGitHub OIDC接続とSSHを経由してLightsailへECR認証情報を渡し、既存のDocker ComposeサービスをPull・再作成する。Lightsail側にAWS CLIは配置しない。
+
 ### 3.9 Go外部パッケージ
 
 | **分類** | **importするパッケージ** | **用途** |
