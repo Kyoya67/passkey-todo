@@ -25,7 +25,8 @@ jobs:
     steps:
       - name: Validate deployment variables
         run: |
-          set -eu
+          set -euo pipefail
+
           for variable in AWS_REGION AWS_ROLE_ARN ECR_REPOSITORY LIGHTSAIL_HOST LIGHTSAIL_SSH_USER LIGHTSAIL_APP_DIR; do
             if [ -z "${!variable}" ]; then
               echo "GitHub repository variable ${variable} is required" >&2
@@ -35,18 +36,58 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            backend=false
+            compose=true
+          elif [ "${BEFORE_SHA}" = "0000000000000000000000000000000000000000" ]; then
+            backend=true
+            compose=true
+          else
+            changed_files="$(git diff --name-only "${BEFORE_SHA}" "${GITHUB_SHA}")"
+
+            backend=false
+            compose=false
+
+            if printf '%s\n' "${changed_files}" | grep -Eq '^backend/'; then
+              backend=true
+            fi
+
+            if printf '%s\n' "${changed_files}" | grep -Fxq 'compose.lightsail.yaml'; then
+              compose=true
+            fi
+          fi
+
+          echo "backend=${backend}" >> "${GITHUB_OUTPUT}"
+          echo "compose=${compose}" >> "${GITHUB_OUTPUT}"
+
+          echo "Backend changed: ${backend}"
+          echo "Compose changed: ${compose}"
 
       - name: Configure AWS credentials
+        if: steps.changes.outputs.backend == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
 
       - name: Login to Amazon ECR
+        if: steps.changes.outputs.backend == 'true'
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push image
+        if: steps.changes.outputs.backend == 'true'
         id: build-image
         env:
           REGISTRY: ${{ steps.ecr-login.outputs.registry }}
@@ -66,6 +107,7 @@ jobs:
           echo "image=${image}" >> "${GITHUB_OUTPUT}"
 
       - name: Connect to Tailscale
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.compose == 'true'
         uses: tailscale/github-action@v4
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
@@ -74,6 +116,7 @@ jobs:
           ping: ${{ vars.LIGHTSAIL_HOST }}
 
       - name: Configure SSH
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.compose == 'true'
         env:
           SSH_PRIVATE_KEY: ${{ secrets.LIGHTSAIL_SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.LIGHTSAIL_SSH_KNOWN_HOSTS }}
@@ -88,7 +131,20 @@ jobs:
           printf '%s\n' "${SSH_KNOWN_HOSTS}" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Upload Lightsail Compose
+        if: steps.changes.outputs.compose == 'true'
+        run: |
+          set -euo pipefail
+
+          scp -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=10 \
+              -i ~/.ssh/lightsail_cd \
+              compose.lightsail.yaml \
+              "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}:${LIGHTSAIL_APP_DIR}/compose.yaml"
+
       - name: Authenticate Lightsail to ECR
+        if: steps.changes.outputs.backend == 'true'
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
         run: |
@@ -103,8 +159,11 @@ jobs:
                 "docker login --username AWS --password-stdin '${ECR_REGISTRY}'"
 
       - name: Deploy to Lightsail
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.compose == 'true'
         env:
           IMAGE: ${{ steps.build-image.outputs.image }}
+          BACKEND_CHANGED: ${{ steps.changes.outputs.backend }}
+          COMPOSE_CHANGED: ${{ steps.changes.outputs.compose }}
         run: |
           set -euo pipefail
 
@@ -113,13 +172,43 @@ jobs:
               -o ConnectTimeout=10 \
               -i ~/.ssh/lightsail_cd \
               "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}" \
-              "cd '${LIGHTSAIL_APP_DIR}' && \
-               BACKEND_IMAGE='${IMAGE}' docker compose pull backend && \
-               BACKEND_IMAGE='${IMAGE}' docker compose up -d --no-deps --no-build backend"
+              "bash -se -- '${LIGHTSAIL_APP_DIR}' '${IMAGE}' '${BACKEND_CHANGED}' '${COMPOSE_CHANGED}'" <<'REMOTE'
+          set -euo pipefail
+
+          app_dir="$1"
+          image="$2"
+          backend_changed="$3"
+          compose_changed="$4"
+
+          cd "${app_dir}"
+
+          if [ "${backend_changed}" != "true" ]; then
+            if [ ! -s .backend-image ]; then
+              echo "Missing .backend-image; an initial backend deployment is required" >&2
+              exit 1
+            fi
+
+            image="$(cat .backend-image)"
+          fi
+
+          if [ "${backend_changed}" = "true" ]; then
+            BACKEND_IMAGE="${image}" docker compose pull backend
+          fi
+
+          if [ "${compose_changed}" = "true" ]; then
+            BACKEND_IMAGE="${image}" docker compose up -d --no-build
+          else
+            BACKEND_IMAGE="${image}" docker compose up -d --no-deps --no-build backend
+          fi
+
+          if [ "${backend_changed}" = "true" ]; then
+            printf '%s\n' "${image}" > .backend-image
+            chmod 600 .backend-image
+          fi
+          REMOTE
 
       - name: Verify deployment
-        env:
-          IMAGE: ${{ steps.build-image.outputs.image }}
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.compose == 'true'
         run: |
           set -euo pipefail
 
@@ -129,4 +218,4 @@ jobs:
               -i ~/.ssh/lightsail_cd \
               "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}" \
               "cd '${LIGHTSAIL_APP_DIR}' && \
-               BACKEND_IMAGE='${IMAGE}' docker compose ps backend"
+               BACKEND_IMAGE=\"\$(cat .backend-image)\" docker compose ps backend"
