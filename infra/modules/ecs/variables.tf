@@ -1,8 +1,4 @@
 variable "name" { type = string }
-variable "env" {
-  type    = string
-  default = "stg"
-}
 variable "image" { type = string }
 variable "migration_image" { type = string }
 variable "port" { type = number }

@@ -4,7 +4,7 @@ resource "aws_ecs_cluster" "this" {
 }
 
 resource "aws_ecs_task_definition" "this" {
-  family                   = "${var.name}-${var.env}"
+  family                   = var.name
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "256"
@@ -45,7 +45,7 @@ resource "aws_ecs_task_definition" "this" {
 }
 
 resource "aws_ecs_task_definition" "migration" {
-  family                   = "${var.name}-${var.env}-migration"
+  family                   = "${var.name}-migration"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "256"

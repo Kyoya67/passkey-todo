@@ -144,7 +144,7 @@ data "aws_iam_policy_document" "github_actions" {
     actions = ["ecs:RunTask"]
 
     resources = [
-      "arn:aws:ecs:*:*:task-definition/${var.name}-stg-migration:*"
+      "arn:aws:ecs:*:*:task-definition/${var.name}-migration:*"
     ]
 
     condition {

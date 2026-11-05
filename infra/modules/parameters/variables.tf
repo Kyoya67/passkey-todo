@@ -1,5 +1,4 @@
 variable "name" { type = string }
-variable "env" { type = string }
 variable "config" { type = map(string) }
 variable "secure_config" {
   type      = map(string)

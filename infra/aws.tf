@@ -112,7 +112,6 @@ module "parameters" {
   source = "./modules/parameters"
 
   name = local.project
-  env  = "stg"
   config = {
     APP_PORT             = tostring(var.backend_port)
     CORS_ALLOWED_ORIGINS = "https://ca-techlounge-todo.kyo8.dev,http://localhost:8081"
