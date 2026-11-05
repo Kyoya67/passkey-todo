@@ -17,19 +17,25 @@ env:
   LIGHTSAIL_HOST: ${{ vars.LIGHTSAIL_HOST }}
   LIGHTSAIL_SSH_USER: ${{ vars.LIGHTSAIL_SSH_USER }}
   LIGHTSAIL_APP_DIR: ${{ vars.LIGHTSAIL_APP_DIR }}
+  DB_SECRET_ID: ${{ vars.DB_SECRET_ID }}
+  BACKEND_PORT: '8080'
+  BACKEND_CONTAINER_PORT: '8080'
+  DB_NAME: todo
+  CORS_ALLOWED_ORIGINS: https://ca-techlounge-todo.kyo8.dev,http://localhost:8081
+  CSRF_ALLOWED_ORIGINS: https://ca-techlounge-todo.kyo8.dev
+  WEBAUTHN_RP_ID: ca-techlounge-todo.kyo8.dev
+  WEBAUTHN_ORIGIN: https://ca-techlounge-todo.kyo8.dev
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Validate deployment variables
         run: |
           set -euo pipefail
-
-          for variable in AWS_REGION AWS_ROLE_ARN ECR_REPOSITORY LIGHTSAIL_HOST LIGHTSAIL_SSH_USER LIGHTSAIL_APP_DIR; do
+          for variable in AWS_REGION AWS_ROLE_ARN ECR_REPOSITORY LIGHTSAIL_HOST LIGHTSAIL_SSH_USER LIGHTSAIL_APP_DIR DB_SECRET_ID; do
             if [ -z "${!variable}" ]; then
-              echo "GitHub repository variable ${variable} is required" >&2
+              echo "Missing GitHub repository variable: ${variable}" >&2
               exit 1
             fi
           done
@@ -46,36 +52,25 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
-
-          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
-            backend=false
-            compose=true
-          elif [ "${BEFORE_SHA}" = "0000000000000000000000000000000000000000" ]; then
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ] || [ -z "${BEFORE_SHA}" ] || [ "${BEFORE_SHA}" = "0000000000000000000000000000000000000000" ]; then
             backend=true
             compose=true
           else
             changed_files="$(git diff --name-only "${BEFORE_SHA}" "${GITHUB_SHA}")"
-
             backend=false
             compose=false
-
-            if printf '%s\n' "${changed_files}" | grep -Eq '^backend/'; then
+            if printf '%s\n' "${changed_files}" | grep -Eq '^backend/|^\.github/workflows/cd-lightsail\.yml$'; then
               backend=true
             fi
-
-            if printf '%s\n' "${changed_files}" | grep -Fxq 'compose.lightsail.yaml'; then
+            if printf '%s\n' "${changed_files}" | grep -Eq '^compose\.lightsail\.yaml$|^\.github/workflows/cd-lightsail\.yml$'; then
               compose=true
             fi
           fi
-
           echo "backend=${backend}" >> "${GITHUB_OUTPUT}"
           echo "compose=${compose}" >> "${GITHUB_OUTPUT}"
 
-          echo "Backend changed: ${backend}"
-          echo "Compose changed: ${compose}"
-
       - name: Configure AWS credentials
-        if: steps.changes.outputs.backend == 'true'
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.compose == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
@@ -94,16 +89,9 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           set -euo pipefail
-
           image="${REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
-
-          docker build \
-            --file backend/Dockerfile \
-            --tag "${image}" \
-            backend
-
+          docker build --file backend/Dockerfile --tag "${image}" backend
           docker push "${image}"
-
           echo "image=${image}" >> "${GITHUB_OUTPUT}"
 
       - name: Connect to Tailscale
@@ -122,12 +110,9 @@ jobs:
           SSH_KNOWN_HOSTS: ${{ secrets.LIGHTSAIL_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-
           install -m 700 -d ~/.ssh
-
           printf '%s\n' "${SSH_PRIVATE_KEY}" > ~/.ssh/lightsail_cd
           chmod 600 ~/.ssh/lightsail_cd
-
           printf '%s\n' "${SSH_KNOWN_HOSTS}" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
@@ -135,13 +120,9 @@ jobs:
         if: steps.changes.outputs.compose == 'true'
         run: |
           set -euo pipefail
-
-          scp -o BatchMode=yes \
-              -o StrictHostKeyChecking=yes \
-              -o ConnectTimeout=10 \
-              -i ~/.ssh/lightsail_cd \
-              compose.lightsail.yaml \
-              "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}:${LIGHTSAIL_APP_DIR}/compose.yaml"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 \
+            -i ~/.ssh/lightsail_cd compose.lightsail.yaml \
+            "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}:${LIGHTSAIL_APP_DIR}/compose.yaml"
 
       - name: Authenticate Lightsail to ECR
         if: steps.changes.outputs.backend == 'true'
@@ -149,16 +130,62 @@ jobs:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
         run: |
           set -euo pipefail
-
           aws ecr get-login-password --region "${AWS_REGION}" |
-            ssh -o BatchMode=yes \
-                -o StrictHostKeyChecking=yes \
-                -o ConnectTimeout=10 \
-                -i ~/.ssh/lightsail_cd \
-                "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}" \
-                "docker login --username AWS --password-stdin '${ECR_REGISTRY}'"
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 \
+              -i ~/.ssh/lightsail_cd "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}" \
+              "docker login --username AWS --password-stdin '${ECR_REGISTRY}'"
 
-      - name: Deploy to Lightsail
+      - name: Prepare remote deployment script
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.compose == 'true'
+        run: |
+          cat > "${RUNNER_TEMP}/deploy-lightsail.py" <<'PYTHON'
+          import json
+          import os
+          import pathlib
+          import subprocess
+          import sys
+
+          data = json.load(sys.stdin)
+          secret = data['secret']
+          username = secret['username']
+          password = secret['password']
+          if not username or not password:
+              raise SystemExit('DB secret contains empty credentials')
+
+          app_dir = pathlib.Path(data['app_dir'])
+          os.chdir(app_dir)
+          image_file = app_dir / '.backend-image'
+          if data['backend_changed']:
+              image = data['image']
+          else:
+              if not image_file.is_file() or not image_file.read_text().strip():
+                  raise SystemExit('Missing .backend-image; initial backend deployment required')
+              image = image_file.read_text().strip()
+
+          config = data['config']
+          env = os.environ.copy()
+          env.update(config)
+          env.update({'DB_USER': username, 'DB_PASSWORD': password, 'BACKEND_IMAGE': image})
+          # compose.lightsail.yaml references MIGRATION_IMAGE even when its profile is inactive.
+          # A valid placeholder prevents interpolation errors; migration is NOT deployed here.
+          env['MIGRATION_IMAGE'] = 'busybox:1.36'
+
+          def compose(*args):
+              subprocess.run(['docker', 'compose', *args], check=True, env=env)
+
+          if data['backend_changed']:
+              compose('pull', 'backend')
+          if data['compose_changed']:
+              compose('up', '-d', '--no-build')
+          else:
+              compose('up', '-d', '--no-deps', '--no-build', 'backend')
+          compose('ps', 'backend')
+          if data['backend_changed']:
+              image_file.write_text(image + '\n')
+              image_file.chmod(0o600)
+          PYTHON
+
+      - name: Deploy to Lightsail with Secrets Manager credentials
         if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.compose == 'true'
         env:
           IMAGE: ${{ steps.build-image.outputs.image }}
@@ -166,56 +193,39 @@ jobs:
           COMPOSE_CHANGED: ${{ steps.changes.outputs.compose }}
         run: |
           set -euo pipefail
-
-          ssh -o BatchMode=yes \
-              -o StrictHostKeyChecking=yes \
-              -o ConnectTimeout=10 \
-              -i ~/.ssh/lightsail_cd \
-              "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}" \
-              "bash -se -- '${LIGHTSAIL_APP_DIR}' '${IMAGE}' '${BACKEND_CHANGED}' '${COMPOSE_CHANGED}'" <<'REMOTE'
-          set -euo pipefail
-
-          app_dir="$1"
-          image="$2"
-          backend_changed="$3"
-          compose_changed="$4"
-
-          cd "${app_dir}"
-
-          if [ "${backend_changed}" != "true" ]; then
-            if [ ! -s .backend-image ]; then
-              echo "Missing .backend-image; an initial backend deployment is required" >&2
-              exit 1
-            fi
-
-            image="$(cat .backend-image)"
+          # The secret is not printed or passed as an SSH command argument.
+          secret_json="$(aws secretsmanager get-secret-value \
+            --secret-id "${DB_SECRET_ID}" \
+            --query SecretString --output text)"
+          if ! jq -e '.username | type == "string" and length > 0' <<< "${secret_json}" >/dev/null || \
+             ! jq -e '.password | type == "string" and length > 0' <<< "${secret_json}" >/dev/null; then
+            echo 'Secrets Manager value must contain username and password strings' >&2
+            exit 1
           fi
 
-          if [ "${backend_changed}" = "true" ]; then
-            BACKEND_IMAGE="${image}" docker compose pull backend
-          fi
+          # Send only non-secret Python code to the server as a temporary script.
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 \
+            -i ~/.ssh/lightsail_cd "${RUNNER_TEMP}/deploy-lightsail.py" \
+            "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}:${LIGHTSAIL_APP_DIR}/.deploy-lightsail.py"
 
-          if [ "${compose_changed}" = "true" ]; then
-            BACKEND_IMAGE="${image}" docker compose up -d --no-build
-          else
-            BACKEND_IMAGE="${image}" docker compose up -d --no-deps --no-build backend
-          fi
-
-          if [ "${backend_changed}" = "true" ]; then
-            printf '%s\n' "${image}" > .backend-image
-            chmod 600 .backend-image
-          fi
-          REMOTE
-
-      - name: Verify deployment
-        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.compose == 'true'
-        run: |
-          set -euo pipefail
-
-          ssh -o BatchMode=yes \
-              -o StrictHostKeyChecking=yes \
-              -o ConnectTimeout=10 \
-              -i ~/.ssh/lightsail_cd \
-              "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}" \
-              "cd '${LIGHTSAIL_APP_DIR}' && \
-               BACKEND_IMAGE=\"\$(cat .backend-image)\" docker compose ps backend"
+          printf '%s\n' "${secret_json}" | jq -c \
+            --arg app_dir "${LIGHTSAIL_APP_DIR}" \
+            --arg image "${IMAGE}" \
+            --arg backend_changed "${BACKEND_CHANGED}" \
+            --arg compose_changed "${COMPOSE_CHANGED}" \
+            --arg backend_port "${BACKEND_PORT}" \
+            --arg container_port "${BACKEND_CONTAINER_PORT}" \
+            --arg db_name "${DB_NAME}" \
+            --arg cors "${CORS_ALLOWED_ORIGINS}" \
+            --arg csrf "${CSRF_ALLOWED_ORIGINS}" \
+            --arg rp_id "${WEBAUTHN_RP_ID}" \
+            --arg origin "${WEBAUTHN_ORIGIN}" \
+            '{secret:.,app_dir:$app_dir,image:$image,
+              backend_changed:($backend_changed=="true"),compose_changed:($compose_changed=="true"),
+              config:{BACKEND_PORT:$backend_port,BACKEND_CONTAINER_PORT:$container_port,
+                DB_NAME:$db_name,CORS_ALLOWED_ORIGINS:$cors,CSRF_ALLOWED_ORIGINS:$csrf,
+                WEBAUTHN_RP_ID:$rp_id,WEBAUTHN_ORIGIN:$origin}}' |
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 \
+              -i ~/.ssh/lightsail_cd "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}" \
+              "python3 '${LIGHTSAIL_APP_DIR}/.deploy-lightsail.py'"
+          unset secret_json
