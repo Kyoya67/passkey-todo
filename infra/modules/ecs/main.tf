@@ -28,23 +28,8 @@ resource "aws_ecs_task_definition" "this" {
       retries     = 3
       startPeriod = 10
     }
-    environment = [
-      { name = "APP_PORT", value = tostring(var.port) },
-      { name = "DB_HOST", value = var.database_host },
-      { name = "DB_PORT", value = "5432" },
-      { name = "DB_NAME", value = "todo" },
-      { name = "DB_SSLMODE", value = "verify-full" },
-      { name = "DB_SSLROOTCERT", value = "/etc/ssl/certs/rds-global-bundle.pem" },
-      { name = "CORS_ALLOWED_ORIGINS", value = var.cors_allowed_origins },
-      { name = "CSRF_ALLOWED_ORIGINS", value = var.csrf_allowed_origins },
-      { name = "WEBAUTHN_RP_ID", value = "ca-techlounge-todo.kyo8.dev" },
-      { name = "WEBAUTHN_ORIGIN", value = "https://ca-techlounge-todo.kyo8.dev" },
-      { name = "REDIS_ADDR", value = "${var.redis_host}:6379" },
-      { name = "REDIS_TLS", value = "true" }
-    ]
     secrets = [
-      { name = "DB_USER", valueFrom = "${var.secret_arn}:username::" },
-      { name = "DB_PASSWORD", valueFrom = "${var.secret_arn}:password::" }
+      for name, arn in var.parameter_arns : { name = name, valueFrom = arn }
     ]
     logConfiguration = {
       logDriver = "awslogs"
@@ -73,16 +58,9 @@ resource "aws_ecs_task_definition" "migration" {
     image     = var.migration_image
     essential = true
     command   = ["up"]
-    environment = [
-      { name = "DB_HOST", value = var.database_host },
-      { name = "DB_PORT", value = "5432" },
-      { name = "DB_NAME", value = "todo" },
-      { name = "DB_SSLMODE", value = "verify-full" },
-      { name = "DB_SSLROOTCERT", value = "/etc/ssl/certs/rds-global-bundle.pem" }
-    ]
     secrets = [
-      { name = "DB_USER", valueFrom = "${var.secret_arn}:username::" },
-      { name = "DB_PASSWORD", valueFrom = "${var.secret_arn}:password::" }
+      for name, arn in var.parameter_arns : { name = name, valueFrom = arn }
+      if contains(["DB_HOST", "DB_NAME", "DB_PASSWORD", "DB_PORT", "DB_SSLMODE", "DB_SSLROOTCERT", "DB_USER"], name)
     ]
     logConfiguration = {
       logDriver = "awslogs"

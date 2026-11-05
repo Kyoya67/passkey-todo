@@ -21,8 +21,8 @@ resource "aws_iam_role_policy_attachment" "execution" {
 
 data "aws_iam_policy_document" "execution" {
   statement {
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [var.secret_arn]
+    actions   = ["ssm:GetParameters"]
+    resources = values(var.parameter_arns)
   }
   statement {
     actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
