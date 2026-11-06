@@ -97,7 +97,7 @@ module "iam" {
   source = "./modules/iam"
 
   name                         = local.project
-  parameter_arns               = module.parameters.parameter_arns
+  parameter_arns               = module.ssm_parameter.parameter_arns
   log_group_arn                = module.logs.arn
   ecr_repository_arn           = module.ecr.arn
   migration_ecr_repository_arn = module.ecr_migration.arn
@@ -108,8 +108,8 @@ module "iam" {
   tags                         = local.common_tags
 }
 
-module "parameters" {
-  source = "./modules/parameters"
+module "ssm_parameter" {
+  source = "./modules/ssm_parameter"
 
   name = local.project
   config = {
@@ -146,7 +146,7 @@ module "ecs" {
   security_group_id  = module.security_groups.ecs_id
   execution_role_arn = module.iam.execution_role_arn
   task_role_arn      = module.iam.task_role_arn
-  parameter_arns     = module.parameters.parameter_arns
+  parameter_arns     = module.ssm_parameter.parameter_arns
   log_group_name     = module.logs.name
   region             = local.region
   tags               = local.common_tags
