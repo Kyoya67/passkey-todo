@@ -9,6 +9,7 @@ resource "aws_ssm_parameter" "config" {
   description = "ECS ${each.key} configuration for ${var.name}."
   type        = "String"
   value       = each.value
+  overwrite   = true
   tier        = "Standard"
   tags        = var.tags
 }
@@ -21,6 +22,7 @@ resource "aws_ssm_parameter" "secure_config" {
   type             = "SecureString"
   value_wo         = var.secure_config[each.key]
   value_wo_version = var.secure_config_version
+  overwrite        = true
   tier             = "Standard"
   tags             = var.tags
 }
