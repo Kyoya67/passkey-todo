@@ -267,6 +267,7 @@ GitHub ActionsのCDは`main`へのpush時に変更箇所を判定し、OIDCでAW
 
 - `backend/`、`api/`、`infra/`またはCD設定に変更がある場合：バックエンドイメージをコミットハッシュでECRへpushし、そのイメージを指定したECSタスク定義の新しいリビジョンを登録してServiceを更新する。
 - `backend/db/migration/`に変更がある場合：上記に加え、マイグレーション用イメージをECRへpushし、専用タスク定義の新しいリビジョンでワンショットタスクを実行する。成功後にバックエンドのServiceを更新する。
+- Lightsail向けCDで`backend/db/migration/`に変更がある場合：バックエンドとマイグレーションのイメージをpullした後、バックエンドを更新する前にComposeの`migration`プロファイルをワンショット実行する。マイグレーションが失敗した場合はバックエンドを更新しない。手動実行では`run_migration`入力で実行可否を選択する。
 - `frontend/`またはCD設定に変更がある場合：静的ファイルをZIP化してAmplifyへアップロード・デプロイする。
 
 Webサーバー用ECSタスクとマイグレーションタスクは、NAT Gatewayを設けずにECRなどのAWSサービスへ接続できるよう、パブリックサブネットでパブリックIPを使う構成とした。これはコストを抑えるための選択であり、プライベート配置と同等の隔離ではない。Webサーバーへの着信はセキュリティグループでALBからの8080番に限定し、RDSとRedisへの着信はECSからのみ許可する。図のAZごとの配置は概念図で、ECSタスクを特定のAZに固定しているわけではない。
@@ -300,4 +301,5 @@ CIではAWSへのデプロイは行わず、コードとTerraform構成の静的
 
 - `backend/`、`api/`、`infra/`またはCD設定に変更がある場合：バックエンドイメージをコミットハッシュでECRへpushし、ECSタスク定義とServiceを更新する。
 - `backend/db/migration/`に変更がある場合：上記のバックエンドジョブ内でマイグレーション用イメージをECRへpushし、ECSワンショットタスクで適用する。成功後にバックエンドをデプロイする。
+- Lightsail向けCDでは、`backend/db/migration/`に変更がある場合、マイグレーション用イメージをECRへpushし、バックエンド更新前にLightsailでpull・ワンショット実行する。手動実行時は`run_migration`入力で実行可否を選択する。
 - `frontend/`またはCD設定に変更がある場合：独立したフロントエンドジョブで静的ファイルをZIP化し、Amplifyへデプロイして完了を確認する。
