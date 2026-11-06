@@ -1,0 +1,271 @@
+name: CD Lightsail
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      run_migration:
+        description: Run the migration image on Lightsail
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  LIGHTSAIL_HOST: ${{ vars.LIGHTSAIL_HOST }}
+  LIGHTSAIL_SSH_USER: ${{ vars.LIGHTSAIL_SSH_USER }}
+  LIGHTSAIL_APP_DIR: ${{ vars.LIGHTSAIL_APP_DIR }}
+  SSM_PARAMETER_PATH: ${{ vars.SSM_PARAMETER_PATH }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate deployment variables
+        run: |
+          set -euo pipefail
+          for variable in AWS_REGION AWS_ROLE_ARN ECR_REPOSITORY LIGHTSAIL_HOST LIGHTSAIL_SSH_USER LIGHTSAIL_APP_DIR SSM_PARAMETER_PATH; do
+            if [ -z "${!variable}" ]; then
+              echo "Missing GitHub repository variable: ${variable}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          RUN_MIGRATION: ${{ inputs.run_migration }}
+        run: |
+          set -euo pipefail
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ] || [ -z "${BEFORE_SHA}" ] || [ "${BEFORE_SHA}" = "0000000000000000000000000000000000000000" ]; then
+            backend=true
+            migration=false
+            if [ "${RUN_MIGRATION}" = "true" ]; then
+              migration=true
+            fi
+            compose=true
+          else
+            changed_files="$(git diff --name-only "${BEFORE_SHA}" "${GITHUB_SHA}")"
+            backend=false
+            migration=false
+            compose=false
+            if printf '%s\n' "${changed_files}" | grep -Eq '^backend/|^\.github/workflows/cd-lightsail\.yml$'; then
+              backend=true
+            fi
+            if printf '%s\n' "${changed_files}" | grep -Eq '^backend/db/migration/'; then
+              migration=true
+            fi
+            if printf '%s\n' "${changed_files}" | grep -Eq '^compose\.lightsail\.yaml$|^\.github/workflows/cd-lightsail\.yml$'; then
+              compose=true
+            fi
+          fi
+          echo "backend=${backend}" >> "${GITHUB_OUTPUT}"
+          echo "migration=${migration}" >> "${GITHUB_OUTPUT}"
+          echo "compose=${compose}" >> "${GITHUB_OUTPUT}"
+
+      - name: Configure AWS credentials
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.migration == 'true' || steps.changes.outputs.compose == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+
+      - name: Login to Amazon ECR
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.migration == 'true'
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push backend image
+        if: steps.changes.outputs.backend == 'true'
+        id: build-image
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          image="${REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          docker build --file backend/Dockerfile --tag "${image}" backend
+          docker push "${image}"
+          echo "image=${image}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push migration image
+        if: steps.changes.outputs.migration == 'true'
+        id: build-migration-image
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          migration_repository="${ECR_REPOSITORY%/backend}/migration"
+          image="${REGISTRY}/${migration_repository}:${IMAGE_TAG}"
+          docker build --file backend/Dockerfile.migration --tag "${image}" backend
+          docker push "${image}"
+          echo "image=${image}" >> "${GITHUB_OUTPUT}"
+
+      - name: Connect to Tailscale
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.migration == 'true' || steps.changes.outputs.compose == 'true'
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: tag:passkey-todo-cd
+          ping: ${{ vars.LIGHTSAIL_HOST }}
+
+      - name: Configure SSH
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.migration == 'true' || steps.changes.outputs.compose == 'true'
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.LIGHTSAIL_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.LIGHTSAIL_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${SSH_PRIVATE_KEY}" > ~/.ssh/lightsail_cd
+          chmod 600 ~/.ssh/lightsail_cd
+          printf '%s\n' "${SSH_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload Lightsail Compose
+        if: steps.changes.outputs.compose == 'true'
+        run: |
+          set -euo pipefail
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 \
+            -i ~/.ssh/lightsail_cd compose.lightsail.yaml \
+            "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}:${LIGHTSAIL_APP_DIR}/compose.yaml"
+
+      - name: Authenticate Lightsail to ECR
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.migration == 'true'
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          set -euo pipefail
+          aws ecr get-login-password --region "${AWS_REGION}" |
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 \
+              -i ~/.ssh/lightsail_cd "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}" \
+              "docker login --username AWS --password-stdin '${ECR_REGISTRY}'"
+
+      - name: Prepare remote deployment script
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.migration == 'true' || steps.changes.outputs.compose == 'true'
+        run: |
+          cat > "${RUNNER_TEMP}/deploy-lightsail.py" <<'PYTHON'
+          import json
+          import os
+          import pathlib
+          import subprocess
+          import sys
+
+          data = json.load(sys.stdin)
+          parameters = data['parameters']
+          required = (
+              'APP_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME',
+              'CORS_ALLOWED_ORIGINS', 'CSRF_ALLOWED_ORIGINS',
+              'WEBAUTHN_RP_ID', 'WEBAUTHN_ORIGIN',
+          )
+          missing = [key for key in required if not isinstance(parameters.get(key), str) or not parameters[key]]
+          if missing:
+              raise SystemExit('Missing SSM parameters: ' + ', '.join(missing))
+
+          app_dir = pathlib.Path(data['app_dir'])
+          os.chdir(app_dir)
+          image_file = app_dir / '.backend-image'
+          migration_image_file = app_dir / '.migration-image'
+          if data['backend_changed']:
+              image = data['image']
+          else:
+              if not image_file.is_file() or not image_file.read_text().strip():
+                  raise SystemExit('Missing .backend-image; initial backend deployment required')
+              image = image_file.read_text().strip()
+
+          env = os.environ.copy()
+          env.update({key: parameters[key] for key in required})
+          env['BACKEND_PORT'] = parameters['APP_PORT']
+          env['BACKEND_CONTAINER_PORT'] = parameters['APP_PORT']
+          env['BACKEND_IMAGE'] = image
+          if data['migration_changed']:
+              migration_image = data['migration_image']
+          elif migration_image_file.is_file() and migration_image_file.read_text().strip():
+              migration_image = migration_image_file.read_text().strip()
+          else:
+              # compose.lightsail.yaml references MIGRATION_IMAGE even when its profile is inactive.
+              migration_image = 'busybox:1.36'
+          env['MIGRATION_IMAGE'] = migration_image
+
+          def compose(*args):
+              subprocess.run(['docker', 'compose', *args], check=True, env=env)
+
+          if data['backend_changed']:
+              compose('pull', 'backend')
+          if data['migration_changed']:
+              compose('pull', 'migration')
+
+          # Apply schema changes before starting the new backend image.
+          # subprocess.run(check=True) stops the deployment when migration fails.
+          if data['migration_changed']:
+              compose('run', '--rm', 'migration', 'up')
+
+          if data['compose_changed']:
+              compose('up', '-d', '--no-build')
+          else:
+              compose('up', '-d', '--no-deps', '--no-build', 'backend')
+          compose('ps', 'backend')
+          if data['backend_changed']:
+              image_file.write_text(image + '\n')
+              image_file.chmod(0o600)
+          if data['migration_changed']:
+              migration_image_file.write_text(migration_image + '\n')
+              migration_image_file.chmod(0o600)
+          PYTHON
+
+      - name: Deploy to Lightsail with SSM parameters
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.migration == 'true' || steps.changes.outputs.compose == 'true'
+        env:
+          IMAGE: ${{ steps.build-image.outputs.image }}
+          MIGRATION_IMAGE: ${{ steps.build-migration-image.outputs.image }}
+          BACKEND_CHANGED: ${{ steps.changes.outputs.backend }}
+          MIGRATION_CHANGED: ${{ steps.changes.outputs.migration }}
+          COMPOSE_CHANGED: ${{ steps.changes.outputs.compose }}
+        run: |
+          set -euo pipefail
+          # Get all parameters under /kyoya67-todo/ (including SecureString values).
+          # ECS-only connection settings are NOT passed to Lightsail.
+          parameters_json="$(aws ssm get-parameters-by-path \
+            --path "${SSM_PARAMETER_PATH}" \
+            --with-decryption \
+            --output json)"
+
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 \
+            -i ~/.ssh/lightsail_cd "${RUNNER_TEMP}/deploy-lightsail.py" \
+            "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}:${LIGHTSAIL_APP_DIR}/.deploy-lightsail.py"
+
+          printf '%s\n' "${parameters_json}" | jq -ce \
+            --arg prefix "${SSM_PARAMETER_PATH}" \
+            --arg app_dir "${LIGHTSAIL_APP_DIR}" \
+            --arg image "${IMAGE}" \
+            --arg migration_image "${MIGRATION_IMAGE}" \
+            --arg backend_changed "${BACKEND_CHANGED}" \
+            --arg migration_changed "${MIGRATION_CHANGED}" \
+            --arg compose_changed "${COMPOSE_CHANGED}" \
+            '{parameters: (.Parameters | map(select(.Name | startswith($prefix)) |
+              {key: (.Name | ltrimstr($prefix) | ltrimstr("/")), value: .Value}) | from_entries),
+              app_dir: $app_dir, image: $image, migration_image: $migration_image,
+              backend_changed: ($backend_changed == "true"),
+              migration_changed: ($migration_changed == "true"),
+              compose_changed: ($compose_changed == "true")}' |
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 \
+              -i ~/.ssh/lightsail_cd "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}" \
+              "python3 '${LIGHTSAIL_APP_DIR}/.deploy-lightsail.py'"
+          unset parameters_json

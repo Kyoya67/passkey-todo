@@ -97,7 +97,7 @@ module "iam" {
   source = "./modules/iam"
 
   name                         = local.project
-  secret_arn                   = module.secrets.arn
+  parameter_arns               = module.ssm_parameter.parameter_arns
   log_group_arn                = module.logs.arn
   ecr_repository_arn           = module.ecr.arn
   migration_ecr_repository_arn = module.ecr_migration.arn
@@ -107,26 +107,49 @@ module "iam" {
   amplify_app_arn              = module.amplify.app_arn
   tags                         = local.common_tags
 }
+
+module "ssm_parameter" {
+  source = "./modules/ssm_parameter"
+
+  name = local.project
+  config = {
+    APP_PORT             = tostring(var.backend_port)
+    CORS_ALLOWED_ORIGINS = "https://ca-techlounge-todo.kyo8.dev,http://localhost:8081"
+    CSRF_ALLOWED_ORIGINS = "https://ca-techlounge-todo.kyo8.dev"
+    DB_HOST              = module.rds.address
+    DB_NAME              = "todo"
+    DB_PORT              = "5432"
+    DB_SSLMODE           = "verify-full"
+    DB_SSLROOTCERT       = "/etc/ssl/certs/rds-global-bundle.pem"
+    REDIS_ADDR           = "${module.elasticache.primary_endpoint_address}:6379"
+    REDIS_TLS            = "true"
+    WEBAUTHN_ORIGIN      = "https://ca-techlounge-todo.kyo8.dev"
+    WEBAUTHN_RP_ID       = "ca-techlounge-todo.kyo8.dev"
+  }
+  secure_config = {
+    DB_USER     = var.db_username
+    DB_PASSWORD = var.db_password
+  }
+  secure_config_version = var.db_password_version
+  tags                  = local.common_tags
+}
+
 module "ecs" {
   source = "./modules/ecs"
 
-  name                 = local.project
-  image                = var.backend_image != "" ? var.backend_image : module.ecr.repository_url
-  migration_image      = var.migration_image != "" ? var.migration_image : module.ecr_migration.repository_url
-  port                 = var.backend_port
-  cluster_name         = local.project
-  subnet_ids           = module.subnet.public_subnet_ids
-  security_group_id    = module.security_groups.ecs_id
-  execution_role_arn   = module.iam.execution_role_arn
-  task_role_arn        = module.iam.task_role_arn
-  secret_arn           = module.secrets.arn
-  log_group_name       = module.logs.name
-  database_host        = module.rds.address
-  redis_host           = module.elasticache.primary_endpoint_address
-  cors_allowed_origins = "https://ca-techlounge-todo.kyo8.dev,http://localhost:8081"
-  csrf_allowed_origins = "https://ca-techlounge-todo.kyo8.dev"
-  region               = local.region
-  tags                 = local.common_tags
+  name               = local.project
+  image              = var.backend_image != "" ? var.backend_image : module.ecr.repository_url
+  migration_image    = var.migration_image != "" ? var.migration_image : module.ecr_migration.repository_url
+  port               = var.backend_port
+  cluster_name       = local.project
+  subnet_ids         = module.subnet.public_subnet_ids
+  security_group_id  = module.security_groups.ecs_id
+  execution_role_arn = module.iam.execution_role_arn
+  task_role_arn      = module.iam.task_role_arn
+  parameter_arns     = module.ssm_parameter.parameter_arns
+  log_group_name     = module.logs.name
+  region             = local.region
+  tags               = local.common_tags
 }
 
 module "acm" {

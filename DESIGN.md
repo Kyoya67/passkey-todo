@@ -45,7 +45,7 @@ kyoya67-todo/
 ### 1.3 環境変数
 
 ローカルの共有設定はプロジェクト直下の`.env`で管理する。Composeは`compose.yaml`と同じディレクトリにある`.env`を、`${VARIABLE}`形式の値を置換するために自動で読み込む。
-クラウド環境の秘密情報は、Composeの`.env`ではなくSecrets Managerで管理する。
+クラウド環境の設定値はSSM Parameter Storeで管理し、ECSタスク定義から`valueFrom`で注入する。DBユーザー・パスワードはSSMの`SecureString`としても管理する。RDSの作成と既存のLightsail CDがSecrets ManagerのDBシークレットを利用するため、Secrets Managerは残し、ECS向けの設定注入だけをSSMへ統一する。この二重管理は、RDS/Lightsailとの互換性を保つ代わりに、値の同期対象を増やすトレードオフがある。
 
 ### 1.4 Docker Composeによるローカル起動
 
@@ -144,6 +144,8 @@ ECS Serviceは必要時のみタスク数を1に増やし、利用しない場�
 | — | GitHub Actions + AWS長期アクセスキー | セキュリティ上のリスクが高く、長期アクセスキーの管理が必要になるため採用しない |
 
 GitHub Actions用のOIDCプロバイダー、IAMロール、信頼ポリシー、ECR・ECS操作権限はTerraformの`infra/modules/iam/`で管理する。OIDCプロバイダーのAudienceは`sts.amazonaws.com`とし、信頼対象は対象リポジトリの`main`ブランチに限定する。
+
+ECS向けのCDは`.github/workflows/cd-ecs.yml`として残し、手動実行だけに限定する。Lightsail向けのCDは`.github/workflows/cd-lightsail.yml`で管理し、`main`へのマージ後のpushで実行する。Lightsail CDはAWS OIDCでECRへイメージをPushした後、TailscaleのGitHub OIDC接続とSSHを経由してLightsailへECR認証情報を渡し、既存のDocker ComposeサービスをPull・再作成する。Lightsail側にAWS CLIは配置しない。
 
 ### 3.9 Go外部パッケージ
 
@@ -265,6 +267,7 @@ GitHub ActionsのCDは`main`へのpush時に変更箇所を判定し、OIDCでAW
 
 - `backend/`、`api/`、`infra/`またはCD設定に変更がある場合：バックエンドイメージをコミットハッシュでECRへpushし、そのイメージを指定したECSタスク定義の新しいリビジョンを登録してServiceを更新する。
 - `backend/db/migration/`に変更がある場合：上記に加え、マイグレーション用イメージをECRへpushし、専用タスク定義の新しいリビジョンでワンショットタスクを実行する。成功後にバックエンドのServiceを更新する。
+- Lightsail向けCDで`backend/db/migration/`に変更がある場合：バックエンドとマイグレーションのイメージをpullした後、バックエンドを更新する前にComposeの`migration`プロファイルをワンショット実行する。マイグレーションが失敗した場合はバックエンドを更新しない。手動実行では`run_migration`入力で実行可否を選択する。
 - `frontend/`またはCD設定に変更がある場合：静的ファイルをZIP化してAmplifyへアップロード・デプロイする。
 
 Webサーバー用ECSタスクとマイグレーションタスクは、NAT Gatewayを設けずにECRなどのAWSサービスへ接続できるよう、パブリックサブネットでパブリックIPを使う構成とした。これはコストを抑えるための選択であり、プライベート配置と同等の隔離ではない。Webサーバーへの着信はセキュリティグループでALBからの8080番に限定し、RDSとRedisへの着信はECSからのみ許可する。図のAZごとの配置は概念図で、ECSタスクを特定のAZに固定しているわけではない。
@@ -298,4 +301,5 @@ CIではAWSへのデプロイは行わず、コードとTerraform構成の静的
 
 - `backend/`、`api/`、`infra/`またはCD設定に変更がある場合：バックエンドイメージをコミットハッシュでECRへpushし、ECSタスク定義とServiceを更新する。
 - `backend/db/migration/`に変更がある場合：上記のバックエンドジョブ内でマイグレーション用イメージをECRへpushし、ECSワンショットタスクで適用する。成功後にバックエンドをデプロイする。
+- Lightsail向けCDでは、`backend/db/migration/`に変更がある場合、マイグレーション用イメージをECRへpushし、バックエンド更新前にLightsailでpull・ワンショット実行する。手動実行時は`run_migration`入力で実行可否を選択する。
 - `frontend/`またはCD設定に変更がある場合：独立したフロントエンドジョブで静的ファイルをZIP化し、Amplifyへデプロイして完了を確認する。
