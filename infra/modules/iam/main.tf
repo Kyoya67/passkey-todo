@@ -78,6 +78,15 @@ resource "aws_iam_role" "github_actions" {
 
 data "aws_iam_policy_document" "github_actions" {
   statement {
+    sid = "ReadSsmParameters"
+    actions = [
+      "ssm:GetParameters",
+      "ssm:GetParametersByPath",
+    ]
+    resources = [var.parameter_path_arn]
+  }
+
+  statement {
     sid = "EcrPush"
     actions = [
       "ecr:BatchCheckLayerAvailability",

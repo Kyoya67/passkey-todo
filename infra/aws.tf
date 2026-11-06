@@ -98,6 +98,7 @@ module "iam" {
 
   name                         = local.project
   parameter_arns               = module.ssm_parameter.parameter_arns
+  parameter_path_arn           = "arn:aws:ssm:${local.region}:${local.account_id}:parameter/${local.project}/*"
   log_group_arn                = module.logs.arn
   ecr_repository_arn           = module.ecr.arn
   migration_ecr_repository_arn = module.ecr_migration.arn
