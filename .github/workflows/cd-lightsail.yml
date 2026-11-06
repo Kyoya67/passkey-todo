@@ -6,8 +6,18 @@ on:
       - main
   workflow_dispatch:
     inputs:
+      run_backend:
+        description: Build and deploy the backend image
+        required: true
+        default: false
+        type: boolean
       run_migration:
         description: Run the migration image on Lightsail
+        required: true
+        default: false
+        type: boolean
+      update_compose:
+        description: Upload and apply the Lightsail Compose file
         required: true
         default: false
         type: boolean
@@ -49,16 +59,24 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           BEFORE_SHA: ${{ github.event.before }}
+          RUN_BACKEND: ${{ inputs.run_backend }}
           RUN_MIGRATION: ${{ inputs.run_migration }}
+          UPDATE_COMPOSE: ${{ inputs.update_compose }}
         run: |
           set -euo pipefail
           if [ "${EVENT_NAME}" = "workflow_dispatch" ] || [ -z "${BEFORE_SHA}" ] || [ "${BEFORE_SHA}" = "0000000000000000000000000000000000000000" ]; then
-            backend=true
+            backend=false
+            if [ "${RUN_BACKEND}" = "true" ]; then
+              backend=true
+            fi
             migration=false
             if [ "${RUN_MIGRATION}" = "true" ]; then
               migration=true
             fi
-            compose=true
+            compose=false
+            if [ "${UPDATE_COMPOSE}" = "true" ]; then
+              compose=true
+            fi
           else
             changed_files="$(git diff --name-only "${BEFORE_SHA}" "${GITHUB_SHA}")"
             backend=false
@@ -99,8 +117,12 @@ jobs:
         run: |
           set -euo pipefail
           image="${REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
-          docker build --file backend/Dockerfile --tag "${image}" backend
-          docker push "${image}"
+          if aws ecr describe-images --repository-name "${ECR_REPOSITORY}" --image-ids imageTag="${IMAGE_TAG}" >/dev/null 2>&1; then
+            echo "Backend image already exists: ${image}"
+          else
+            docker build --file backend/Dockerfile --tag "${image}" backend
+            docker push "${image}"
+          fi
           echo "image=${image}" >> "${GITHUB_OUTPUT}"
 
       - name: Build and push migration image
@@ -113,8 +135,12 @@ jobs:
           set -euo pipefail
           migration_repository="${ECR_REPOSITORY%/backend}/migration"
           image="${REGISTRY}/${migration_repository}:${IMAGE_TAG}"
-          docker build --file backend/Dockerfile.migration --tag "${image}" backend
-          docker push "${image}"
+          if aws ecr describe-images --repository-name "${migration_repository}" --image-ids imageTag="${IMAGE_TAG}" >/dev/null 2>&1; then
+            echo "Migration image already exists: ${image}"
+          else
+            docker build --file backend/Dockerfile.migration --tag "${image}" backend
+            docker push "${image}"
+          fi
           echo "image=${image}" >> "${GITHUB_OUTPUT}"
 
       - name: Connect to Tailscale

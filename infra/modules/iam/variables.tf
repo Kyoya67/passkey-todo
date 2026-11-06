@@ -1,5 +1,6 @@
 variable "name" { type = string }
 variable "parameter_arns" { type = map(string) }
+variable "parameter_path_arn" { type = string }
 variable "log_group_arn" { type = string }
 variable "ecr_repository_arn" { type = string }
 variable "migration_ecr_repository_arn" { type = string }
