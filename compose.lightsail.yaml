@@ -10,6 +10,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
       DB_SSLMODE: disable
+      DB_SSLROOTCERT: ${DB_SSLROOTCERT:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
       CSRF_ALLOWED_ORIGINS: ${CSRF_ALLOWED_ORIGINS}
       WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID}
@@ -60,6 +61,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
       DB_SSLMODE: disable
+      DB_SSLROOTCERT: ${DB_SSLROOTCERT:-}
     depends_on:
       db:
         condition: service_healthy
