@@ -9,9 +9,16 @@ resource "aws_route53_record" "alb" {
   name    = var.record_name
   type    = "A"
 
-  alias {
-    name                   = var.alb_dns_name
-    zone_id                = var.alb_zone_id
-    evaluate_target_health = true
+  records = var.target == "lightsail" ? [var.lightsail_ip] : null
+  ttl     = var.target == "lightsail" ? 300 : null
+
+  dynamic "alias" {
+    for_each = var.target == "alb" ? [1] : []
+
+    content {
+      name                   = var.alb_dns_name
+      zone_id                = var.alb_zone_id
+      evaluate_target_health = true
+    }
   }
 }

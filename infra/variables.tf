@@ -47,3 +47,21 @@ variable "backend_port" {
   description = "Port exposed by the backend container."
   default     = 8080
 }
+
+variable "api_target" {
+  type        = string
+  description = "API DNS target: alb or lightsail."
+  default     = "alb"
+
+  validation {
+    condition     = contains(["alb", "lightsail"], var.api_target)
+    error_message = "api_target must be alb or lightsail."
+  }
+}
+
+variable "lightsail_static_ip" {
+  type        = string
+  description = "Lightsail static IPv4 address used when api_target is lightsail."
+  default     = null
+  nullable    = true
+}

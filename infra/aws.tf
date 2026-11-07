@@ -187,6 +187,8 @@ module "route53" {
   record_name  = "api.ca-techlounge-todo.kyo8.dev"
   alb_dns_name = module.alb.dns_name
   alb_zone_id  = module.alb.zone_id
+  target       = var.api_target
+  lightsail_ip = var.lightsail_static_ip
   tags         = local.common_tags
 }
 
