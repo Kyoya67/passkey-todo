@@ -4,7 +4,7 @@ resource "aws_route53_zone" "this" {
   tags = var.tags
 }
 
-resource "aws_route53_record" "alb" {
+resource "aws_route53_record" "api" {
   zone_id = aws_route53_zone.this.zone_id
   name    = var.record_name
   type    = "A"
@@ -21,4 +21,9 @@ resource "aws_route53_record" "alb" {
       evaluate_target_health = true
     }
   }
+}
+
+moved {
+  from = aws_route53_record.alb
+  to   = aws_route53_record.api
 }
