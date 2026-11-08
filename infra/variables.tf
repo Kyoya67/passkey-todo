@@ -4,11 +4,12 @@ locals {
 
   project = "kyoya67-todo"
 
-  api_target          = "lightsail"
+  deployment_target   = "lightsail"
   lightsail_static_ip = "35.74.94.30"
   backend_image       = ""
   migration_image     = ""
   backend_port        = 8080
+  is_ecs              = local.deployment_target == "ecs"
 
   common_tags = {
     Project   = local.project
