@@ -62,16 +62,6 @@ module "logs" {
   tags              = local.common_tags
 }
 
-module "secrets" {
-  source = "./modules/secrets"
-
-  name             = "${local.project}/database"
-  username         = var.db_username
-  password         = var.db_password
-  password_version = var.db_password_version
-  tags             = local.common_tags
-}
-
 module "rds" {
   source = "./modules/rds"
 
