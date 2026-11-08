@@ -12,7 +12,8 @@ kyoya67-todo/
 ├── frontend/
 ├── api/
 ├── infra/
-├── compose.yaml
+├── compose.local.yaml
+├── compose.lightsail.yaml
 ├── AGENTS.md
 ├── DESIGN.md
 └── README.md
@@ -25,13 +26,15 @@ kyoya67-todo/
 
 ### 1.2 環境変数
 
-ローカルの共有設定はプロジェクト直下の`.env`で管理する。Composeは`compose.yaml`と同じディレクトリにある`.env`を、`${VARIABLE}`形式の値を置換するために自動で読み込む。
+ローカルの共有設定はプロジェクト直下の`.env`で管理する。プロジェクトルートから`docker compose -f compose.local.yaml`を実行すると、Composeは`.env`を`${VARIABLE}`形式の値の置換に利用する。
 クラウド環境の設定値はSSM Parameter Storeで管理し、ECSタスク定義から`valueFrom`で注入する。DBユーザー・パスワードはSSMの`SecureString`としても管理する。RDSの作成と既存のLightsail CDがSecrets ManagerのDBシークレットを利用するため、Secrets Managerは残し、ECS向けの設定注入だけをSSMへ統一する。この二重管理は、RDS/Lightsailとの互換性を保つ代わりに、値の同期対象を増やすトレードオフがある。
 
 ### 1.3 Docker Composeによるローカル起動
 
 `backend/Dockerfile`はGoのバックエンドコンテナイメージを作成するマルチステージDockerfileとし、ローカル環境とAWS ECS Fargateで共通利用する。
-実行環境固有の設定はDockerfileに埋め込まず、ローカルでは`compose.yaml`、AWSではECSタスク定義から環境変数・シークレットを注入する。
+実行環境固有の設定はDockerfileに埋め込まず、ローカルでは`compose.local.yaml`、Lightsailでは`compose.lightsail.yaml`、ECSではタスク定義から環境変数・シークレットを注入する。
+
+ローカル用であることをファイル名から判別できるよう、`compose.yaml`を`compose.local.yaml`へ改名した。Composeの自動検出対象から外れるため、起動・停止・マイグレーション操作では`-f compose.local.yaml`の指定が必要になる。Makefileのローカルマイグレーションコマンドもこのファイルを明示する。Lightsail向けCDは引き続き`compose.lightsail.yaml`をリモートの`compose.yaml`として配置する。
 
 ---
 

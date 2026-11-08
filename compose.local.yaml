@@ -1,3 +1,4 @@
+# Local development: docker compose -f compose.local.yaml up -d --build
 services:
   backend:
     build:

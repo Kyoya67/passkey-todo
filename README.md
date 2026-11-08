@@ -55,7 +55,7 @@ Go/Echo、PostgreSQL、sqlc、OpenAPI、AWS ECS Fargateを採用し、API仕様�
 
 ## ローカル環境の起動
 
-バックエンド、PostgreSQL、Swagger UIをDocker Composeで起動する。フロントエンドはNode.jsの静的HTTPサーバーで配信する。
+バックエンド、PostgreSQL、Redis、Swagger UIをローカル専用の`compose.local.yaml`で起動する。フロントエンドはNode.jsの静的HTTPサーバーで配信する。Composeファイルは自動選択されないため、ローカルの操作では`-f compose.local.yaml`を指定する。
 
 `````sh
 cp .env.example .env
@@ -66,12 +66,12 @@ cp .env.example .env
 プロジェクトルートで実行する。
 
 `````sh
-docker compose config
-docker compose up -d --build
-docker compose ps
+docker compose -f compose.local.yaml config --quiet
+docker compose -f compose.local.yaml up -d --build
+docker compose -f compose.local.yaml ps
 `````
 
-`backend`、`db`、`swagger-ui`が起動し、`db`サービスが`healthy`になっていることを確認する。Swagger UIは[http://localhost:8081](http://localhost:8081)で利用できる。
+`backend`、`db`、`redis`、`swagger-ui`が起動し、`db`と`redis`サービスが`healthy`になっていることを確認する。Swagger UIは[http://localhost:8081](http://localhost:8081)で利用できる。
 
 ### フロントエンドの起動
 
@@ -126,10 +126,10 @@ Swagger UIでは、次の4つのTODO APIを順番に確認できる。
 プロジェクトルートでComposeのサービスを停止する。
 
 `````sh
-docker compose down
+docker compose -f compose.local.yaml down
 `````
 
-`docker compose down -v`を実行するとPostgreSQLのボリュームも削除されるため、保存データを削除する場合以外は使用しない。
+`docker compose -f compose.local.yaml down -v`を実行するとPostgreSQLのボリュームも削除されるため、保存データを削除する場合以外は使用しない。
 
 ## クラウドAPIをSwagger UIで確認する
 
