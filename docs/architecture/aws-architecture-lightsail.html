@@ -194,15 +194,15 @@ path.aws { stroke: var(--color-ink); stroke-width:1.6; fill:none; }
 <path class="aws dash" d="M800 206 V300 H470 V344" marker-end="url(#open)"/><text class="el" x="620" y="288" text-anchor="middle">A → 35.74.94.30</text>
 <path class="aws" d="M506 480 H724" marker-end="url(#open)"/><text class="el" x="615" y="468" text-anchor="middle">HTTP backend:8080</text>
 <path class="aws" d="M796 480 H1064" marker-end="url(#open)"/><text class="el" x="930" y="468" text-anchor="middle">SQL :5432</text>
-<path class="aws" d="M760 556 V590 H1100 V624" marker-end="url(#open)"/><text class="el" x="930" y="578" text-anchor="middle">Redis :6379</text>
-<path class="aws dash" d="M760 624 V610 H1000 V510 H1064" marker-end="url(#open)"/><text class="el" x="1030" y="498" text-anchor="middle">migrate up</text>
+<path class="aws" d="M760 556 V624" marker-end="url(#open)"/><text class="el" x="825" y="590" text-anchor="middle">Redis :6379</text>
+<path class="aws dash" d="M1100 624 V556" marker-end="url(#open)"/><text class="el" x="1160" y="590" text-anchor="middle">migrate up</text>
 <path class="aws" d="M470 556 V804" marker-end="url(#open)"/><text class="el" x="555" y="745" text-anchor="middle">persist TLS / config</text>
 <path class="aws" d="M1136 480 H1260 V840 H1136" marker-end="url(#open)"/><text class="el" x="1265" y="780" text-anchor="middle">persist DB</text>
 <path class="n dash" d="M110 1094 V936" marker-end="url(#open)"/><text class="el" x="160" y="1030" text-anchor="middle">SSH / SCP</text>
 <path class="n dash" d="M146 860 H294" marker-end="url(#open)"/><text class="el" x="220" y="848" text-anchor="middle">deploy + config</text>
 <path class="n dash" d="M146 1150 H300 V1230 H760 V1206" marker-end="url(#open)"/><text class="el" x="530" y="1218" text-anchor="middle">build / push (changed)</text>
 <path class="aws dash" d="M760 1094 V1000 H900 V500 H796" marker-end="url(#open)"/><text class="el" x="825" y="988" text-anchor="middle">pull images</text>
-<path class="aws dash" d="M900 660 H796" marker-end="url(#open)"/><text class="el" x="845" y="648" text-anchor="middle">pull migration</text>
+<path class="aws dash" d="M900 660 H1064" marker-end="url(#open)"/><text class="el" x="982" y="648" text-anchor="middle">pull migration</text>
 <path class="n dash" d="M1100 1206 V1270 H110 V1206" marker-end="url(#open)"/><text class="el" x="630" y="1258" text-anchor="middle">GetParametersByPath → JSON → SSH stdin</text>
 </svg>
 <div class="node" style="left:10px;top:450px;width:200px"><div class="tile "><img src="%%ICON_user%%" alt=""></div><div class="name"><span>User</span></div><div class="role"><span>browser</span></div></div>
@@ -211,8 +211,8 @@ path.aws { stroke: var(--color-ink); stroke-width:1.6; fill:none; }
 <div class="node" style="left:370px;top:450px;width:200px"><div class="tile "><img src="%%ICON_caddy%%" alt=""></div><div class="name"><span>Caddy</span></div><div class="role"><span>TLS / HTTP → HTTPS</span></div></div>
 <div class="node" style="left:660px;top:450px;width:200px"><div class="tile "><img src="%%ICON_backend%%" alt=""></div><div class="name"><span>バックエンド</span></div><div class="role"><span>Go / Echo · :8080</span></div></div>
 <div class="node" style="left:1000px;top:450px;width:200px"><div class="tile "><img src="%%ICON_postgres%%" alt=""></div><div class="name"><span>PostgreSQL 16</span></div><div class="role"><span>db:5432 · TODO / passkeys</span></div></div>
-<div class="node" style="left:1000px;top:630px;width:200px"><div class="tile "><img src="%%ICON_redis%%" alt=""></div><div class="name"><span>Redis 7.4</span></div><div class="role"><span>redis:6379 · session / challenge</span></div></div>
-<div class="node" style="left:660px;top:630px;width:200px"><div class="tile "><img src="%%ICON_migration%%" alt=""></div><div class="name"><span>Migration</span></div><div class="role"><span>one-shot · before backend</span></div></div>
+<div class="node" style="left:660px;top:630px;width:200px"><div class="tile "><img src="%%ICON_redis%%" alt=""></div><div class="name"><span>Redis 7.4</span></div><div class="role"><span>redis:6379 · session / challenge</span></div></div>
+<div class="node" style="left:1000px;top:630px;width:200px"><div class="tile "><img src="%%ICON_migration%%" alt=""></div><div class="name"><span>Migration</span></div><div class="role"><span>one-shot · before backend</span></div></div>
 <div class="node" style="left:370px;top:810px;width:200px"><div class="tile "><img src="%%ICON_volume%%" alt=""></div><div class="name"><span>Caddy volumes</span></div><div class="role"><span>caddy_data / caddy_config</span></div></div>
 <div class="node" style="left:1000px;top:810px;width:200px"><div class="tile "><img src="%%ICON_volume%%" alt=""></div><div class="name"><span>Postgres volume</span></div><div class="role"><span>postgres_data</span></div></div>
 <div class="node" style="left:10px;top:1100px;width:200px"><div class="tile "><img src="%%ICON_github-actions%%" alt=""></div><div class="name"><span>GitHub Actions</span></div><div class="role"><span>main push / manual · AWS OIDC</span></div></div>

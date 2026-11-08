@@ -1,27 +1,8 @@
 # Design Doc
 
 ## 1. 開発方針
-
-### 1.1 PhaseとIssueの構成
-
-開発をPhaseに分け、各Phaseの作業を複数のIssueで管理する。
-
-- Phase 1（ローカル開発）：Issue #1〜#6
-- Phase 2（AWS環境）：Issue #7〜#10
-- Phase 3（追加機能）：Issue #11〜#16
-
-### 1.2 ブランチ運用
-
-GitHub ProjectsのPhaseは関連するIssueを開発段階ごとにまとめ、Issueは個別の作業単位として管理する。
-開発には`main`、`develop`、Issueごとの作業ブランチを使用する。
-
-1. 各Issueに着手する際、`develop`から作業ブランチ（`feature/XXX`など）を作成する。
-2. 実装・テスト完了後、`develop`に対するPull Requestを作成する。
-3. コードレビューとCIの成功を確認したうえで`develop`にマージする。
-4. Phase内のすべてのIssueが`develop`にマージされ、統合テストが成功した段階で、`develop`から`main`へのPull Requestを作成する。
-5. Phase単位で`main`へマージし、その時点の成果物をリリースする。
-
-### 1.3 モノレポ構成
+    
+### 1.1 モノレポ構成
 
 バックエンド、将来追加するフロントエンド、IaCを同一リポジトリで管理するモノレポ構成を採用する。
 
@@ -42,12 +23,12 @@ kyoya67-todo/
 - `api/`ではバックエンドとフロントエンドで共有するAPI仕様をopenapiで管理する。
 - `infra/`ではAWS ECS Fargate、ECR、RDS、IAM、Route 53、Amplifyなどのインフラ構成をTerraformで管理する。
 
-### 1.3 環境変数
+### 1.2 環境変数
 
 ローカルの共有設定はプロジェクト直下の`.env`で管理する。Composeは`compose.yaml`と同じディレクトリにある`.env`を、`${VARIABLE}`形式の値を置換するために自動で読み込む。
 クラウド環境の設定値はSSM Parameter Storeで管理し、ECSタスク定義から`valueFrom`で注入する。DBユーザー・パスワードはSSMの`SecureString`としても管理する。RDSの作成と既存のLightsail CDがSecrets ManagerのDBシークレットを利用するため、Secrets Managerは残し、ECS向けの設定注入だけをSSMへ統一する。この二重管理は、RDS/Lightsailとの互換性を保つ代わりに、値の同期対象を増やすトレードオフがある。
 
-### 1.4 Docker Composeによるローカル起動
+### 1.3 Docker Composeによるローカル起動
 
 `backend/Dockerfile`はGoのバックエンドコンテナイメージを作成するマルチステージDockerfileとし、ローカル環境とAWS ECS Fargateで共通利用する。
 実行環境固有の設定はDockerfileに埋め込まず、ローカルでは`compose.yaml`、AWSではECSタスク定義から環境変数・シークレットを注入する。
@@ -255,15 +236,43 @@ sequenceDiagram
 
 ### 4.3 AWS構成
 
-AWS環境は1つのみ構築する。
+AWS環境は1つとし、現在はLightsail版を利用する。Terraformの`deployment_target`で`lightsail`または`ecs`を選択し、APIのDNS参照先とECS版リソースの作成有無を切り替える。フロントエンドは両構成ともAmplifyで配信する。以下の図はリポジトリの実装・設定に基づく構成図で、AWS上のリソースの稼働状況を示すものではない。
 
-![AWS構成図](aws-architecture.svg)
+#### 4.3.1 Lightsail版（現在の運用構成）
 
-編集用ファイル：[aws-architecture.drawio](aws-architecture.drawio)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/architecture/aws-architecture-lightsail-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/architecture/aws-architecture-lightsail.png">
+  <img alt="Lightsail版AWS構成図" src="docs/architecture/aws-architecture-lightsail.png">
+</picture>
 
-フロントエンドはAmplifyで配信し、APIへのリクエストはRoute 53、WAF、ALBを経てECS FargateのGoサーバーへ届く。ECSはプライベートサブネットのRDSにTODO・認証情報を、ElastiCache for Redisにチャレンジ・セッションなどの短期データを保存する。コンテナイメージはECRで管理し、DBマイグレーションは専用のECSタスクで実行する。
+[ダーク版](docs/architecture/aws-architecture-lightsail-dark.png) · [HTML版](docs/architecture/aws-architecture-lightsail-built.html) · [編集用HTML](docs/architecture/aws-architecture-lightsail.html)
 
-Webサーバー用ECSタスクとマイグレーションタスクは、NAT Gatewayを設けずにECRなどのAWSサービスへ接続できるよう、パブリックサブネットでパブリックIPを使う構成とした。これはコストを抑えるための選択であり、プライベート配置と同等の隔離ではない。Webサーバーへの着信はセキュリティグループでALBからの8080番に限定し、RDSとRedisへの着信はECSからのみ許可する。図のAZごとの配置は概念図で、ECSタスクを特定のAZに固定しているわけではない。
+Route 53のAPI用AレコードはLightsailのStatic IPを参照する。ブラウザは名前解決後、Lightsail上のCaddyへ直接接続する。Caddyは80・443番で待ち受け、HTTPをHTTPSへリダイレクトし、TLSを終端してComposeネットワーク内の`backend:8080`へ転送する。DNSは名前解決に使われ、HTTPリクエストを中継するものではない。
+
+1台のLightsail上でCaddy、Go/Echoのバックエンド、PostgreSQL、RedisをDocker Composeで動かす。バックエンドのホスト側ポート公開は`127.0.0.1:8080`に限定し、PostgreSQLとRedisはホスト側へポートを公開しない。TODO・パスキーの公開鍵などを保存するPostgreSQLは`postgres_data`で永続化し、Caddyは`caddy_data`と`caddy_config`を利用する。Redisはチャレンジ・セッションなどの短期データを扱い、RDB・AOFによる永続化を無効にしているため、再作成時にはセッションなどが失われる。
+
+GitHub ActionsはAWS OIDCで認証し、バックエンド・マイグレーション用イメージをECRで管理する。SSM Parameter Storeから取得した設定値をTailscale経由のSSH標準入力でLightsailへ渡し、デプロイスクリプトがComposeのプロセス環境へ注入する。Compose・Caddyfileも必要時に転送する。マイグレーション対象の変更がある場合は専用コンテナを単発実行し、成功した後にバックエンドを更新する。
+
+この構成はALB・RDS・ElastiCacheなどの固定費を抑えられる一方、アプリケーションとDBを同一ホストで運用するため、障害の影響が集中する。ホストの更新・容量管理・バックアップは別途必要であり、Dockerボリュームの永続化だけでは外部バックアップにならない。
+
+#### 4.3.2 ECS版（切り替え用に保持する構成）
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/architecture/aws-architecture-ecs-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/architecture/aws-architecture-ecs.png">
+  <img alt="ECS版AWS構成図" src="docs/architecture/aws-architecture-ecs.png">
+</picture>
+
+[ダーク版](docs/architecture/aws-architecture-ecs-dark.png) · [HTML版](docs/architecture/aws-architecture-ecs-built.html) · [編集用HTML](docs/architecture/aws-architecture-ecs.html)
+
+Route 53のAPI用AliasレコードはALBを参照する。ブラウザは名前解決後にALBへHTTPSで接続し、ALBがTLSを終端してECS Fargateのバックエンドへ転送する。WAFはALBに関連付けてリクエストを検査する。TODO・認証情報はプライベートサブネットのRDSへ、チャレンジ・セッションなどの短期データはElastiCache for Redisへ保存する。コンテナイメージはECR、タスクへ注入する設定値はSSM Parameter Storeで管理し、DBマイグレーションは専用のECSタスクで実行する。
+
+ALB、バックエンド用ECSタスク、マイグレーションタスクはパブリックサブネットに配置する。ECSタスクはNAT Gatewayを設けずにECRなどへ接続できるようパブリックIPを使う。これはコストを抑えるための選択であり、プライベート配置と同等の隔離ではない。バックエンドへの着信はセキュリティグループでALBからの8080番に限定し、RDSとRedisへの着信はECSからのみ許可する。図ではAZごとの重複、IAM・ACM・ログなどを省略している。
+
+ECS版への切り替え時は、リソースの作成とDNS変更に加えて、DBデータの移行・マイグレーション・動作確認が必要になる。`deployment_target`の変更だけでLightsail上のデータがRDSへ移るわけではない。
+
+従来の編集用ファイルも履歴・参考資料として保持する：[aws-architecture.drawio](aws-architecture.drawio)。
 
 ---
 
