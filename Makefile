@@ -1,14 +1,14 @@
 .PHONY: db-migrate-up db-migrate-down db-migrate-force db-migrate-ecs ecs-start ecs-stop ecs-status rds-start rds-stop check-aws-env check-rds-env
 
 db-migrate-up:
-	docker compose --profile migration run --rm migration up
+	docker compose -f compose.local.yaml --profile migration run --rm migration up
 
 db-migrate-down:
-	docker compose --profile migration run --rm migration down 1
+	docker compose -f compose.local.yaml --profile migration run --rm migration down 1
 
 db-migrate-force:
 	@test -n "$(VERSION)" || (echo "Usage: make db-migrate-force VERSION=<migration_version>" && exit 1)
-	docker compose --profile migration run --rm migration force $(VERSION)
+	docker compose -f compose.local.yaml --profile migration run --rm migration force $(VERSION)
 
 check-aws-env:
 	@test -n "$(AWS_PROFILE)" && test -n "$(AWS_REGION)" && test -n "$(ECS_CLUSTER)" && test -n "$(ECS_SERVICE)" || \

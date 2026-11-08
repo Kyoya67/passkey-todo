@@ -1,4 +1,5 @@
 module "vpc" {
+  count  = local.is_ecs ? 1 : 0
   source = "./modules/vpc"
 
   cidr_block = "10.0.0.0/16"
@@ -6,9 +7,10 @@ module "vpc" {
 }
 
 module "subnet" {
+  count  = local.is_ecs ? 1 : 0
   source = "./modules/subnet"
 
-  vpc_id             = module.vpc.id
+  vpc_id             = try(module.vpc[0].id, null)
   availability_zones = ["ap-northeast-1a", "ap-northeast-1c"]
   public_cidrs       = ["10.0.0.0/18", "10.0.64.0/18"]
   private_cidrs      = ["10.0.128.0/18", "10.0.192.0/18"]
@@ -16,27 +18,30 @@ module "subnet" {
 }
 
 module "internet_gateway" {
+  count  = local.is_ecs ? 1 : 0
   source = "./modules/internet_gateway"
 
-  vpc_id = module.vpc.id
+  vpc_id = try(module.vpc[0].id, null)
   tags   = local.common_tags
 }
 
 module "route_table" {
+  count  = local.is_ecs ? 1 : 0
   source = "./modules/route_table"
 
-  vpc_id              = module.vpc.id
-  internet_gateway_id = module.internet_gateway.id
-  public_subnet_ids   = module.subnet.public_subnet_ids
-  private_subnet_ids  = module.subnet.private_subnet_ids
+  vpc_id              = try(module.vpc[0].id, null)
+  internet_gateway_id = try(module.internet_gateway[0].id, null)
+  public_subnet_ids   = try(module.subnet[0].public_subnet_ids, [])
+  private_subnet_ids  = try(module.subnet[0].private_subnet_ids, [])
   tags                = local.common_tags
 }
 
 module "security_groups" {
+  count  = local.is_ecs ? 1 : 0
   source = "./modules/security_groups"
 
   name   = local.project
-  vpc_id = module.vpc.id
+  vpc_id = try(module.vpc[0].id, null)
   tags   = local.common_tags
 }
 
@@ -62,22 +67,13 @@ module "logs" {
   tags              = local.common_tags
 }
 
-module "secrets" {
-  source = "./modules/secrets"
-
-  name             = "${local.project}/database"
-  username         = var.db_username
-  password         = var.db_password
-  password_version = var.db_password_version
-  tags             = local.common_tags
-}
-
 module "rds" {
+  count  = local.is_ecs ? 1 : 0
   source = "./modules/rds"
 
   identifier        = local.project
-  subnet_ids        = module.subnet.private_subnet_ids
-  security_group_id = module.security_groups.rds_id
+  subnet_ids        = try(module.subnet[0].private_subnet_ids, [])
+  security_group_id = try(module.security_groups[0].rds_id, null)
   username          = var.db_username
   password          = var.db_password
   password_version  = var.db_password_version
@@ -85,11 +81,12 @@ module "rds" {
 }
 
 module "elasticache" {
+  count  = local.is_ecs ? 1 : 0
   source = "./modules/elasticache"
 
   name              = "${local.project}-auth"
-  subnet_ids        = module.subnet.private_subnet_ids
-  security_group_id = module.security_groups.redis_id
+  subnet_ids        = try(module.subnet[0].private_subnet_ids, [])
+  security_group_id = try(module.security_groups[0].redis_id, null)
   tags              = local.common_tags
 }
 
@@ -117,13 +114,13 @@ module "ssm_parameter" {
     APP_PORT             = tostring(local.backend_port)
     CORS_ALLOWED_ORIGINS = "https://ca-techlounge-todo.kyo8.dev,http://localhost:8081"
     CSRF_ALLOWED_ORIGINS = "https://ca-techlounge-todo.kyo8.dev"
-    DB_HOST              = module.rds.address
+    DB_HOST              = local.is_ecs ? try(module.rds[0].address, "") : "db"
     DB_NAME              = "todo"
     DB_PORT              = "5432"
     DB_SSLMODE           = "verify-full"
     DB_SSLROOTCERT       = "/etc/ssl/certs/rds-global-bundle.pem"
-    REDIS_ADDR           = "${module.elasticache.primary_endpoint_address}:6379"
-    REDIS_TLS            = "true"
+    REDIS_ADDR           = local.is_ecs ? "${try(module.elasticache[0].primary_endpoint_address, "")}:6379" : "redis:6379"
+    REDIS_TLS            = local.is_ecs ? "true" : "false"
     WEBAUTHN_ORIGIN      = "https://ca-techlounge-todo.kyo8.dev"
     WEBAUTHN_RP_ID       = "ca-techlounge-todo.kyo8.dev"
   }
@@ -136,6 +133,7 @@ module "ssm_parameter" {
 }
 
 module "ecs" {
+  count  = local.is_ecs ? 1 : 0
   source = "./modules/ecs"
 
   name               = local.project
@@ -143,8 +141,8 @@ module "ecs" {
   migration_image    = local.migration_image != "" ? local.migration_image : module.ecr_migration.repository_url
   port               = local.backend_port
   cluster_name       = local.project
-  subnet_ids         = module.subnet.public_subnet_ids
-  security_group_id  = module.security_groups.ecs_id
+  subnet_ids         = try(module.subnet[0].public_subnet_ids, [])
+  security_group_id  = try(module.security_groups[0].ecs_id, null)
   execution_role_arn = module.iam.execution_role_arn
   task_role_arn      = module.iam.task_role_arn
   parameter_arns     = module.ssm_parameter.parameter_arns
@@ -162,21 +160,23 @@ module "acm" {
 }
 
 module "alb" {
+  count  = local.is_ecs ? 1 : 0
   source = "./modules/alb"
 
   name              = local.project
-  vpc_id            = module.vpc.id
-  subnet_ids        = module.subnet.public_subnet_ids
-  security_group_id = module.security_groups.alb_id
+  vpc_id            = try(module.vpc[0].id, null)
+  subnet_ids        = try(module.subnet[0].public_subnet_ids, [])
+  security_group_id = try(module.security_groups[0].alb_id, null)
   target_port       = local.backend_port
   certificate_arn   = module.acm.certificate_arn
   tags              = local.common_tags
 }
 
 module "waf" {
+  count   = local.is_ecs ? 1 : 0
   source  = "./modules/waf"
   name    = local.project
-  alb_arn = module.alb.arn
+  alb_arn = try(module.alb[0].arn, null)
   tags    = local.common_tags
 }
 
@@ -185,9 +185,9 @@ module "route53" {
 
   zone_name    = "ca-techlounge-todo.kyo8.dev"
   record_name  = "api.ca-techlounge-todo.kyo8.dev"
-  alb_dns_name = module.alb.dns_name
-  alb_zone_id  = module.alb.zone_id
-  target       = local.api_target
+  alb_dns_name = try(module.alb[0].dns_name, "")
+  alb_zone_id  = try(module.alb[0].zone_id, "")
+  target       = local.is_ecs ? "alb" : "lightsail"
   lightsail_ip = local.lightsail_static_ip
   tags         = local.common_tags
 }
@@ -202,9 +202,10 @@ module "amplify" {
 }
 
 resource "aws_ecs_service" "backend" {
+  count           = local.is_ecs ? 1 : 0
   name            = local.project
-  cluster         = module.ecs.cluster_id
-  task_definition = module.ecs.task_definition_arn
+  cluster         = try(module.ecs[0].cluster_id, null)
+  task_definition = try(module.ecs[0].task_definition_arn, null)
   desired_count   = 1
   launch_type     = "FARGATE"
 
@@ -215,13 +216,13 @@ resource "aws_ecs_service" "backend" {
   }
 
   network_configuration {
-    subnets          = module.subnet.public_subnet_ids
-    security_groups  = [module.security_groups.ecs_id]
+    subnets          = try(module.subnet[0].public_subnet_ids, [])
+    security_groups  = [try(module.security_groups[0].ecs_id, null)]
     assign_public_ip = true
   }
 
   load_balancer {
-    target_group_arn = module.alb.target_group_arn
+    target_group_arn = try(module.alb[0].target_group_arn, null)
     container_name   = "backend"
     container_port   = local.backend_port
   }
