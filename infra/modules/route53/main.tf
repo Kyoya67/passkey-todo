@@ -22,8 +22,3 @@ resource "aws_route53_record" "api" {
     }
   }
 }
-
-moved {
-  from = aws_route53_record.alb
-  to   = aws_route53_record.api
-}
