@@ -114,7 +114,7 @@ module "ssm_parameter" {
 
   name = local.project
   config = {
-    APP_PORT             = tostring(var.backend_port)
+    APP_PORT             = tostring(local.backend_port)
     CORS_ALLOWED_ORIGINS = "https://ca-techlounge-todo.kyo8.dev,http://localhost:8081"
     CSRF_ALLOWED_ORIGINS = "https://ca-techlounge-todo.kyo8.dev"
     DB_HOST              = module.rds.address
@@ -139,9 +139,9 @@ module "ecs" {
   source = "./modules/ecs"
 
   name               = local.project
-  image              = var.backend_image != "" ? var.backend_image : module.ecr.repository_url
-  migration_image    = var.migration_image != "" ? var.migration_image : module.ecr_migration.repository_url
-  port               = var.backend_port
+  image              = local.backend_image != "" ? local.backend_image : module.ecr.repository_url
+  migration_image    = local.migration_image != "" ? local.migration_image : module.ecr_migration.repository_url
+  port               = local.backend_port
   cluster_name       = local.project
   subnet_ids         = module.subnet.public_subnet_ids
   security_group_id  = module.security_groups.ecs_id
@@ -168,7 +168,7 @@ module "alb" {
   vpc_id            = module.vpc.id
   subnet_ids        = module.subnet.public_subnet_ids
   security_group_id = module.security_groups.alb_id
-  target_port       = var.backend_port
+  target_port       = local.backend_port
   certificate_arn   = module.acm.certificate_arn
   tags              = local.common_tags
 }
@@ -187,8 +187,8 @@ module "route53" {
   record_name  = "api.ca-techlounge-todo.kyo8.dev"
   alb_dns_name = module.alb.dns_name
   alb_zone_id  = module.alb.zone_id
-  target       = var.api_target
-  lightsail_ip = var.lightsail_static_ip
+  target       = local.api_target
+  lightsail_ip = local.lightsail_static_ip
   tags         = local.common_tags
 }
 
@@ -223,32 +223,8 @@ resource "aws_ecs_service" "backend" {
   load_balancer {
     target_group_arn = module.alb.target_group_arn
     container_name   = "backend"
-    container_port   = var.backend_port
+    container_port   = local.backend_port
   }
 
   tags = local.common_tags
-}
-
-output "api_domain_name" {
-  value = module.route53.record_name
-}
-
-output "ecs_cluster_name" {
-  value = module.ecs.cluster_id
-}
-
-output "migration_task_definition_arn" {
-  value = module.ecs.migration_task_definition_arn
-}
-
-output "migration_subnet_ids" {
-  value = module.subnet.public_subnet_ids
-}
-
-output "ecs_security_group_id" {
-  value = module.security_groups.ecs_id
-}
-
-output "route53_name_servers" {
-  value = module.route53.name_servers
 }
