@@ -7,5 +7,5 @@ output "name_servers" {
 }
 
 output "record_name" {
-  value = aws_route53_record.alb.name
+  value = aws_route53_record.api.name
 }

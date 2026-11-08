@@ -4,6 +4,12 @@ locals {
 
   project = "kyoya67-todo"
 
+  api_target          = "lightsail"
+  lightsail_static_ip = "35.74.94.30"
+  backend_image       = ""
+  migration_image     = ""
+  backend_port        = 8080
+
   common_tags = {
     Project   = local.project
     ManagedBy = "Terraform"
@@ -12,8 +18,9 @@ locals {
 
 variable "db_username" {
   type        = string
+  sensitive   = true
   description = "Master username for RDS PostgreSQL."
-  default     = "todo_admin"
+  nullable    = false
 }
 
 variable "db_password" {
@@ -28,22 +35,4 @@ variable "db_password_version" {
   type        = number
   description = "Increment this value when rotating the RDS master password."
   default     = 1
-}
-
-variable "backend_image" {
-  type        = string
-  description = "Backend container image URI in ECR."
-  default     = ""
-}
-
-variable "migration_image" {
-  type        = string
-  description = "Migration container image URI in ECR."
-  default     = ""
-}
-
-variable "backend_port" {
-  type        = number
-  description = "Port exposed by the backend container."
-  default     = 8080
 }
