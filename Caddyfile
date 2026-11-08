@@ -1,0 +1,3 @@
+api.ca-techlounge-todo.kyo8.dev {
+  reverse_proxy backend:8080
+}

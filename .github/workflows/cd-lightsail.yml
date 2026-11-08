@@ -88,7 +88,7 @@ jobs:
             if printf '%s\n' "${changed_files}" | grep -Eq '^backend/db/migration/'; then
               migration=true
             fi
-            if printf '%s\n' "${changed_files}" | grep -Eq '^compose\.lightsail\.yaml$|^\.github/workflows/cd-lightsail\.yml$'; then
+            if printf '%s\n' "${changed_files}" | grep -Eq '^compose\.lightsail\.yaml$|^Caddyfile$|^\.github/workflows/cd-lightsail\.yml$'; then
               compose=true
             fi
           fi
@@ -172,6 +172,9 @@ jobs:
           scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 \
             -i ~/.ssh/lightsail_cd compose.lightsail.yaml \
             "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}:${LIGHTSAIL_APP_DIR}/compose.yaml"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 \
+            -i ~/.ssh/lightsail_cd Caddyfile \
+            "${LIGHTSAIL_SSH_USER}@${LIGHTSAIL_HOST}:${LIGHTSAIL_APP_DIR}/Caddyfile"
 
       - name: Authenticate Lightsail to ECR
         if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.migration == 'true'
