@@ -18,13 +18,13 @@ APIは運用コストを抑えるため停止している場合があります�
 
 | ライトモード | ダークモード |
 |---|---|
-| ![ライトモードのパスキー登録・ログイン画面](docs/screenshots/passkey-login-light.png) | ![ダークモードのパスキー登録・ログイン画面](docs/screenshots/passkey-login-dark.png) |
+| ![ライトモードのパスキー登録・ログイン画面](asset/screenshots/passkey-login-light.png) | ![ダークモードのパスキー登録・ログイン画面](asset/screenshots/passkey-login-dark.png) |
 
 ### TODOボード
 
 | ライトモード | ダークモード |
 |---|---|
-| ![ライトモードのTODOボード。未着手・進行中・完了の3列にTODOを表示](docs/screenshots/todo-board-light.png) | ![ダークモードのTODOボード。未着手・進行中・完了の3列にTODOを表示](docs/screenshots/todo-board-dark.png) |
+| ![ライトモードのTODOボード。未着手・進行中・完了の3列にTODOを表示](asset/screenshots/todo-board-light.png) | ![ダークモードのTODOボード。未着手・進行中・完了の3列にTODOを表示](asset/screenshots/todo-board-dark.png) |
 
 ## ドキュメント全体像
 
