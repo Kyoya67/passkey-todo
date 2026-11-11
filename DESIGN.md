@@ -244,12 +244,12 @@ AWS環境は1つとし、現在はLightsail版を利用する。Terraformの`dep
 #### 4.3.1 Lightsail版（現在の運用構成）
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/architecture/aws-architecture-lightsail-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="docs/architecture/aws-architecture-lightsail.png">
-  <img alt="Lightsail版AWS構成図" src="docs/architecture/aws-architecture-lightsail.png">
+  <source media="(prefers-color-scheme: dark)" srcset="asset/architecture/aws-architecture-lightsail-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="asset/architecture/aws-architecture-lightsail.png">
+  <img alt="Lightsail版AWS構成図" src="asset/architecture/aws-architecture-lightsail.png">
 </picture>
 
-[ダーク版](docs/architecture/aws-architecture-lightsail-dark.png) · [HTML版](docs/architecture/aws-architecture-lightsail-built.html) · [編集用HTML](docs/architecture/aws-architecture-lightsail.html)
+[ダーク版](asset/architecture/aws-architecture-lightsail-dark.png) · [HTML版](asset/architecture/aws-architecture-lightsail-built.html) · [編集用HTML](asset/architecture/aws-architecture-lightsail.html)
 
 Route 53のAPI用AレコードはLightsailのStatic IPを参照する。ブラウザは名前解決後、Lightsail上のCaddyへ直接接続する。Caddyは80・443番で待ち受け、HTTPをHTTPSへリダイレクトし、TLSを終端してComposeネットワーク内の`backend:8080`へ転送する。DNSは名前解決に使われ、HTTPリクエストを中継するものではない。
 
@@ -262,12 +262,12 @@ GitHub ActionsはAWS OIDCで認証し、バックエンド・マイグレーシ�
 #### 4.3.2 ECS版（切り替え用に保持する構成）
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/architecture/aws-architecture-ecs-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="docs/architecture/aws-architecture-ecs.png">
-  <img alt="ECS版AWS構成図" src="docs/architecture/aws-architecture-ecs.png">
+  <source media="(prefers-color-scheme: dark)" srcset="asset/architecture/aws-architecture-ecs-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="asset/architecture/aws-architecture-ecs.png">
+  <img alt="ECS版AWS構成図" src="asset/architecture/aws-architecture-ecs.png">
 </picture>
 
-[ダーク版](docs/architecture/aws-architecture-ecs-dark.png) · [HTML版](docs/architecture/aws-architecture-ecs-built.html) · [編集用HTML](docs/architecture/aws-architecture-ecs.html)
+[ダーク版](asset/architecture/aws-architecture-ecs-dark.png) · [HTML版](asset/architecture/aws-architecture-ecs-built.html) · [編集用HTML](asset/architecture/aws-architecture-ecs.html)
 
 Route 53のAPI用AliasレコードはALBを参照する。ブラウザは名前解決後にALBへHTTPSで接続し、ALBがTLSを終端してECS Fargateのバックエンドへ転送する。WAFはALBに関連付けてリクエストを検査する。TODO・認証情報はプライベートサブネットのRDSへ、チャレンジ・セッションなどの短期データはElastiCache for Redisへ保存する。コンテナイメージはECR、タスクへ注入する設定値はSSM Parameter Storeで管理し、DBマイグレーションは専用のECSタスクで実行する。
 
